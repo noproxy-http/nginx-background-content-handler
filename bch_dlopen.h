@@ -26,7 +26,6 @@
 
 #include <ngx_config.h>
 #include <ngx_core.h>
-#include <ngx_http.h>
 
 void* bch_dyload_library(ngx_log_t* log, const char* libname);
 

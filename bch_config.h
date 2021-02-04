@@ -15,20 +15,18 @@
  */
 
 /* 
- * File:   bch_http_common.h
+ * File:   bch_config.h
  * Author: alex
  *
- * Created on February 2, 2021, 10:28 PM
+ * Created on February 4, 2021, 7:43 PM
  */
 
-#ifndef BCH_HTTP_COMMON_H
-#define BCH_HTTP_COMMON_H
+#ifndef BCH_CONFIG_H
+#define BCH_CONFIG_H
 
-#include <ngx_config.h>
-#include <ngx_core.h>
-#include <ngx_http.h>
+typedef struct bch_config {
+    
+} bch_config;
 
-ngx_int_t bch_send_buffer(ngx_http_request_t* r, ngx_buf_t* buf);
-
-#endif /* BCH_HTTP_COMMON_H */
+#endif /* BCH_CONFIG_H */
 

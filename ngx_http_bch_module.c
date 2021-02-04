@@ -26,23 +26,24 @@
 #include <ngx_http.h>
 
 #include "bch_http_notify.h"
+#include "bch_http_notify_handler.h"
 #include "bch_request_handler.h"
 
 static ngx_int_t initialize(ngx_cycle_t* cycle) {
     ngx_str_t st = ngx_string("/home/alex/projects/nginx/nginx-background-content-handler/test/build/libtest_app.so\0");
-    bch_request_handler_initialize(cycle->log, st);
-    bch_http_notify_init(cycle->log, 8888);
+    bch_request_handler_init(cycle->log, st);
+    bch_http_notify_init(8888);
 }
 
 static char* conf_background_content_handler(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
-    /* Install the handler. */
+    /* install the handler. */
     ngx_http_core_loc_conf_t* clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
     clcf->handler = bch_request_handler;
     return NGX_CONF_OK;
 }
 
 static char* conf_background_content_handler_notify(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
-    /* Install the handler. */
+    /* install the handler. */
     ngx_http_core_loc_conf_t* clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
     clcf->handler = bch_http_notify_handler;
     return NGX_CONF_OK;

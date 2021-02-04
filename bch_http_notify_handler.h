@@ -15,30 +15,20 @@
  */
 
 /* 
- * File:   bch_http_notify.h
+ * File:   bch_http_notify_handler.h
  * Author: alex
  *
- * Created on January 31, 2021, 11:55 AM
+ * Created on February 4, 2021, 6:26 PM
  */
 
-#ifndef BCH_HTTP_NOTIFY_H
-#define BCH_HTTP_NOTIFY_H
+#ifndef BCH_HTTP_NOTIFY_HANDLER_H
+#define BCH_HTTP_NOTIFY_HANDLER_H
 
-#include "jansson.h"
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
 
-typedef struct bch_resp {
-    void* r;
-    unsigned int status;
-    json_t* headers;
-    u_char* data;
-    size_t data_len;
-} bch_resp;
+ngx_int_t bch_http_notify_handler(ngx_http_request_t *r);
 
-int bch_http_notify_init(int tcp_port);
-
-int bch_http_notify_callback(void* request, int http_status,
-        const char* headers, int headers_len,
-        const char* data, int data_len);
-
-#endif /* BCH_HTTP_NOTIFY_H */
+#endif /* BCH_HTTP_NOTIFY_HANDLER_H */
 

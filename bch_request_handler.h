@@ -28,7 +28,7 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
-ngx_int_t bch_request_handler_initialize(ngx_log_t* log, ngx_str_t libname);
+ngx_int_t bch_request_handler_init(ngx_log_t* log, ngx_str_t libname);
 
 ngx_int_t bch_request_handler(ngx_http_request_t *r);
 

@@ -87,33 +87,30 @@ static void json_set_ngx_string(json_t* obj, const char* key, ngx_str_t str) {
     }
 }
 
-static json_t* read_meta(ngx_http_request_t* r) {
+static json_t* create_meta(ngx_http_request_t* r) {
     json_t* res = json_object();
-    json_t* handle = json_integer((long long) r);
-    if (NULL != handle) { // cannot happen
-        json_object_set_new(res, "requestHandle", handle);
-    }
     json_set_ngx_string(res, "uri", r->uri);
     json_set_ngx_string(res, "args", r->args);
     json_set_ngx_string(res, "unparsedUri", r->unparsed_uri);
     json_set_ngx_string(res, "method", r->method_name);
     json_set_ngx_string(res, "protocol", r->http_protocol);
+
+    json_t* headers = read_headers(&r->headers_in);
+    json_object_set_new(res, "headers", headers);
+
     return res;
 }
 
 static void body_handler(ngx_http_request_t* r) {
-
     if (NULL == r->request_body) {
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;
     }
 
-    json_t* meta = read_meta(r);
-    json_t* headers = read_headers(&r->headers_in);
-    json_object_set_new(meta, "headers", headers);
-
+    json_t* meta = create_meta(r);
     char* dumped = json_dumps(meta, JSON_INDENT(4));
     json_decref(meta);
+
     char* data = NULL;
     int data_len = 0;
     ngx_chain_t* in = r->request_body->bufs;
@@ -122,43 +119,40 @@ static void body_handler(ngx_http_request_t* r) {
         data_len = in->buf->last - in->buf->pos;
     }
 
-    int err_handle = bch_receive_request_fun(r, dumped, strlen(dumped), data, data_len);
+    // call handler
+    int err_handler = bch_receive_request_fun(r, dumped, strlen(dumped), data, data_len);
     free(dumped);
-    if (0 != err_handle) {
+    if (0 != err_handler) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'submit_json_request' call returned error, code: [%d]", err_handle);
+                "'bch_request_handler': 'bch_receive_request' call returned error, code: [%d]", err_handler);
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;
     }
 }
 
-ngx_int_t bch_request_handler_initialize(ngx_log_t* log, ngx_str_t libname) {
+ngx_int_t bch_request_handler_init(ngx_log_t* log, ngx_str_t libname) {
     // load handler shared lib
     if (0 == libname.len) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "handler shared library not specified");
+        ngx_log_error(NGX_LOG_ERR, log, 0,
+                "'bch_request_handler_init': handler shared library not specified");
         return NGX_ERROR;
     }
 
     // load lib, conf values are NUL-terminated
     void* lib = bch_dyload_library(log, (const char*)libname.data);
     if (NULL == lib) {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "cannot load shared library, name: [%s]", libname.data);
         return NGX_ERROR;
     }
 
     // lookup init
     bch_initialize_type init_fun = bch_dyload_symbol(log, lib, "bch_initialize");
     if (NULL == init_fun) {
-        ngx_log_error(NGX_LOG_ERR, log, 0,
-                "cannot find symbol 'bch_initialize' in shared library, name: [%s]", libname.data);
         return NGX_ERROR;
     }
 
     // lookup receive
     bch_receive_request_fun = bch_dyload_symbol(log, lib, "bch_receive_request");
     if (NULL == bch_receive_request_fun) {
-        ngx_log_error(NGX_LOG_ERR, log, 0,
-                "cannot find symbol 'bch_receive_request' in shared library, name: [%s]", libname.data);
         return NGX_ERROR;
     }
 
@@ -167,7 +161,7 @@ ngx_int_t bch_request_handler_initialize(ngx_log_t* log, ngx_str_t libname) {
     int err_init = init_fun(bch_http_notify_callback, appconf, strlen(appconf));
     if (0 != err_init) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
-                "'bch_request_handler_initialize': application init error, code [%d]", err_init);
+                "'bch_request_handler_init': application init error, code [%d]", err_init);
         return NGX_ERROR;
     }
 
