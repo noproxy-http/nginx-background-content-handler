@@ -24,11 +24,13 @@
 #ifndef BCH_HTTP_NOTIFY_H
 #define BCH_HTTP_NOTIFY_H
 
+#include <stdint.h>
+
 #include "jansson.h"
 
 typedef struct bch_resp {
     void* r;
-    unsigned int status;
+    uint16_t status;
     json_t* headers;
     u_char* data;
     size_t data_len;

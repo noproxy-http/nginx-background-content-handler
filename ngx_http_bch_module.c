@@ -29,10 +29,16 @@
 #include "bch_http_notify_handler.h"
 #include "bch_request_handler.h"
 
+static uint16_t notify_port = 0;
+//static char* conf_str = "";
+
 static ngx_int_t initialize(ngx_cycle_t* cycle) {
+//    ngx_log_error(NGX_LOG_ERR, cycle->log, 0, "str: [%s]", conf_str);
+
     ngx_str_t st = ngx_string("/home/alex/projects/nginx/nginx-background-content-handler/test/build/libtest_app.so\0");
     bch_request_handler_init(cycle->log, st);
-    bch_http_notify_init(8888);
+    bch_http_notify_init(notify_port);
+    return NGX_OK;
 }
 
 static char* conf_background_content_handler(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
@@ -46,6 +52,20 @@ static char* conf_background_content_handler_notify(ngx_conf_t *cf, ngx_command_
     /* install the handler. */
     ngx_http_core_loc_conf_t* clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
     clcf->handler = bch_http_notify_handler;
+
+    // get notify port
+    ngx_str_t* elts = cf->args->elts;
+    ngx_str_t* st = &elts[1];
+
+    char* endptr;
+    long port = strtol((char*) st->data, &endptr, 0);
+    if (st->data + st->len != endptr || port < 0 || port > 1<<16) {
+        ngx_conf_log_error(NGX_LOG_ERR, cf, 0,
+                "'background_content_handler_notify': invalid port number specified: [%s]", st->data);
+        return NGX_CONF_ERROR;
+    }
+
+    notify_port = port;
     return NGX_CONF_OK;
 }
 
@@ -59,7 +79,7 @@ static ngx_command_t conf_desc[] = {
       NULL},
 
     { ngx_string("background_content_handler_notify"), /* directive */
-      NGX_HTTP_LOC_CONF | NGX_CONF_NOARGS, /* location context and arguments count*/
+      NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1, /* location context and arguments count*/
       conf_background_content_handler_notify, /* configuration setup function */
       NGX_HTTP_LOC_CONF_OFFSET, /* Conf offset. */
       0, /* No offset when storing the module configuration on struct. */
