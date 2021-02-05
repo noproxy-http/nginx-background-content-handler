@@ -15,23 +15,18 @@
  */
 
 /* 
- * File:   bch_config.h
+ * File:   bch_http_notify_callback.h
  * Author: alex
  *
- * Created on February 4, 2021, 7:43 PM
+ * Created on February 5, 2021, 12:22 PM
  */
 
-#ifndef BCH_CONFIG_H
-#define BCH_CONFIG_H
+#ifndef BCH_HTTP_NOTIFY_CALLBACK_H
+#define BCH_HTTP_NOTIFY_CALLBACK_H
 
-#include <ngx_config.h>
-#include <ngx_core.h>
+int bch_http_notify_callback(void* request, int http_status,
+        const char* headers, int headers_len,
+        const char* data, int data_len);
 
-typedef struct bch_config {
-    ngx_str_t libname;
-    ngx_str_t appconf;
-} bch_config;
-
-
-#endif /* BCH_CONFIG_H */
+#endif /* BCH_HTTP_NOTIFY_CALLBACK_H */
 

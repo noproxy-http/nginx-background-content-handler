@@ -52,7 +52,7 @@ int bch_receive_request(void* request,
     
     std::cerr << "request: " << reinterpret_cast<int64_t>(request) << std::endl;
     auto meta = std::string(metadata, static_cast<size_t>(metadata_len));
-    std::cerr << "meta: " << meta << std::endl;
+    //std::cerr << "meta: " << meta << std::endl;
     auto data_st = nullptr != data ? std::string(data, static_cast<size_t>(data_len)) : "";
     std::cerr << "data_len: " << data_st.length() << std::endl;
 

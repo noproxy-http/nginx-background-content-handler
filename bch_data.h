@@ -15,32 +15,52 @@
  */
 
 /* 
- * File:   bch_http_notify.h
+ * File:   bch_data.h
  * Author: alex
  *
- * Created on January 31, 2021, 11:55 AM
+ * Created on February 5, 2021, 12:12 PM
  */
 
-#ifndef BCH_HTTP_NOTIFY_H
-#define BCH_HTTP_NOTIFY_H
+#ifndef BCH_DATA_H
+#define BCH_DATA_H
+
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
 
 #include <stdint.h>
 
 #include "jansson.h"
 
+extern ngx_module_t ngx_http_background_content_handler_module;
+
+typedef int (*bch_receive_request_type)(
+        void* request,
+        const char* metadata, int metadata_len,
+        const char* data, int data_len);
+
+typedef struct bch_loc_ctx {
+    ngx_str_t libname;
+    ngx_str_t appconf;
+
+    bch_receive_request_type receive_request_fun;
+
+    uint16_t notify_port;
+    int notify_sock;
+} bch_loc_ctx;
+
+typedef struct bch_req {
+    ngx_http_request_t* r;
+    bch_loc_ctx* ctx;
+} bch_req;
+
 typedef struct bch_resp {
-    void* r;
+    bch_req* request;
     uint16_t status;
     json_t* headers;
     u_char* data;
     size_t data_len;
 } bch_resp;
 
-int bch_http_notify_init(int tcp_port);
-
-int bch_http_notify_callback(void* request, int http_status,
-        const char* headers, int headers_len,
-        const char* data, int data_len);
-
-#endif /* BCH_HTTP_NOTIFY_H */
+#endif /* BCH_DATA_H */
 

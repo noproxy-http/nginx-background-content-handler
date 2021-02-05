@@ -29,7 +29,7 @@
 
 #include "jansson.h"
 
-#include "bch_http_notify.h"
+#include "bch_data.h"
 
 static bch_resp* get_resp(ngx_log_t* log, ngx_str_t args) {
     if (0 == args.len) {
@@ -94,7 +94,7 @@ static ngx_int_t add_header(ngx_http_request_t* r, const char* key_in, const cha
 }
 
 static ngx_buf_t* create_client_buf(bch_resp* resp) {
-    ngx_http_request_t* r = resp->r;
+    ngx_http_request_t* r = resp->request->r;
 
     ngx_buf_t* buf = ngx_pcalloc(r->pool, sizeof(ngx_buf_t));
     if (NULL == buf) {
@@ -151,7 +151,7 @@ static ngx_int_t send_buffer(ngx_http_request_t* r, ngx_buf_t* buf) {
 }
 
 static ngx_int_t send_client_resp(bch_resp* resp) {
-    ngx_http_request_t* r = resp->r;
+    ngx_http_request_t* r = resp->request->r;
 
     if (r->connection->error) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,

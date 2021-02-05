@@ -28,21 +28,15 @@
 
 #include "jansson.h"
 
+#include "bch_data.h"
 #include "bch_dlopen.h"
 #include "bch_functions.h"
-#include "bch_http_notify.h"
+#include "bch_http_notify_callback.h"
 
 typedef int (*bch_initialize_type)(
         bch_send_response_type response_callback,
         const char* hanler_config,
         int hanler_config_len);
-
-typedef int (*bch_receive_request_type)(
-        void* request,
-        const char* metadata, int metadata_len,
-        const char* data, int data_len);
-
-static bch_receive_request_type bch_receive_request_fun = NULL;
 
 static json_t* read_headers(ngx_http_headers_in_t* headers_in) {
     ngx_list_part_t* part = &headers_in->headers.part;
@@ -101,45 +95,16 @@ static json_t* create_meta(ngx_http_request_t* r) {
     return res;
 }
 
-static void body_handler(ngx_http_request_t* r) {
-    if (NULL == r->request_body) {
-        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
-        return;
-    }
-
-    json_t* meta = create_meta(r);
-    char* dumped = json_dumps(meta, JSON_INDENT(4));
-    json_decref(meta);
-
-    char* data = NULL;
-    int data_len = 0;
-    ngx_chain_t* in = r->request_body->bufs;
-    if (NULL != in && NULL != in->buf) {
-        data = (char*) in->buf->pos;
-        data_len = in->buf->last - in->buf->pos;
-    }
-
-    // call handler
-    int err_handler = bch_receive_request_fun(r, dumped, strlen(dumped), data, data_len);
-    free(dumped);
-    if (0 != err_handler) {
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_request_handler': 'bch_receive_request' call returned error, code: [%d]", err_handler);
-        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
-        return;
-    }
-}
-
-ngx_int_t bch_request_handler_init(ngx_log_t* log, ngx_str_t libname) {
+ngx_int_t init(ngx_log_t* log, bch_loc_ctx* ctx) {
     // load handler shared lib
-    if (0 == libname.len) {
+    if (0 == ctx->libname.len) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
                 "'bch_request_handler_init': handler shared library not specified");
         return NGX_ERROR;
     }
 
     // load lib, conf values are NUL-terminated
-    void* lib = bch_dyload_library(log, (const char*)libname.data);
+    void* lib = bch_dyload_library(log, (const char*)ctx->libname.data);
     if (NULL == lib) {
         return NGX_ERROR;
     }
@@ -151,14 +116,13 @@ ngx_int_t bch_request_handler_init(ngx_log_t* log, ngx_str_t libname) {
     }
 
     // lookup receive
-    bch_receive_request_fun = bch_dyload_symbol(log, lib, "bch_receive_request");
-    if (NULL == bch_receive_request_fun) {
+    ctx->receive_request_fun = bch_dyload_symbol(log, lib, "bch_receive_request");
+    if (NULL == ctx->receive_request_fun) {
         return NGX_ERROR;
     }
 
     // call init
-    const char* appconf = "/foo/bar/app.conf";
-    int err_init = init_fun(bch_http_notify_callback, appconf, strlen(appconf));
+    int err_init = init_fun(bch_http_notify_callback, (const char*) ctx->appconf.data, ctx->appconf.len);
     if (0 != err_init) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
                 "'bch_request_handler_init': application init error, code [%d]", err_init);
@@ -168,11 +132,67 @@ ngx_int_t bch_request_handler_init(ngx_log_t* log, ngx_str_t libname) {
     return NGX_OK;
 }
 
-ngx_int_t bch_request_handler(bch_config* conf, ngx_http_request_t* r) {
+static void body_handler(ngx_http_request_t* r) {
+    if (NULL == r->request_body) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                "'bch_request_handler': cannot access request body");
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
 
-    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "1; [%s]", conf->appconf.data);
-    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "2; [%s]", conf->libname.data);
+    bch_loc_ctx* ctx = ngx_http_get_module_loc_conf(r, ngx_http_background_content_handler_module);
+    if (NULL == ctx) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                "'bch_request_handler': cannot access location context");
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
 
+    if (NULL == ctx->receive_request_fun) {
+        ngx_int_t err_init = init(r->connection->log, ctx);
+        if (NGX_OK != err_init)  {
+            ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+            return;
+        }
+    }
+
+    // prepare meta
+    json_t* meta = create_meta(r);
+    char* dumped = json_dumps(meta, JSON_INDENT(4));
+    json_decref(meta);
+
+    // prepare data
+    char* data = NULL;
+    int data_len = 0;
+    ngx_chain_t* in = r->request_body->bufs;
+    if (NULL != in && NULL != in->buf) {
+        data = (char*) in->buf->pos;
+        data_len = in->buf->last - in->buf->pos;
+    }
+
+    // prepare request
+    bch_req* request = ngx_pcalloc(r->pool, sizeof(bch_req));
+    if (NULL == request) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                "'bch_request_handler': error allocating buffer, size: [%l]", sizeof(bch_req));
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
+    request->r = r;
+    request->ctx = ctx;
+
+    // call handler
+    int err_handler = ctx->receive_request_fun(request, dumped, strlen(dumped), data, data_len);
+    free(dumped);
+    if (0 != err_handler) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                "'bch_request_handler': 'bch_receive_request' call returned error, code: [%d]", err_handler);
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
+}
+
+ngx_int_t bch_request_handler(ngx_http_request_t* r) {
     // http://mailman.nginx.org/pipermail/nginx/2007-August/001559.html
     r->request_body_in_single_buf = 1;
     r->request_body_in_persistent_file = 1;

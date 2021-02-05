@@ -7,10 +7,9 @@ ngx_module_incs="$ngx_addon_dir/jansson"
 ngx_module_srcs="\
     $ngx_addon_dir/ngx_http_bch_module.c \
     $ngx_addon_dir/bch_dlopen.c \
-    $ngx_addon_dir/bch_http_notify.c \
+    $ngx_addon_dir/bch_http_notify_callback.c \
     $ngx_addon_dir/bch_http_notify_handler.c \
     $ngx_addon_dir/bch_request_handler.c \
-    $ngx_addon_dir/bch_selfpipe_notify.c \
     $ngx_addon_dir/jansson/dump.c \
     $ngx_addon_dir/jansson/error.c \
     $ngx_addon_dir/jansson/hashtable.c \

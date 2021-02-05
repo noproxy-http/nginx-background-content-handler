@@ -15,13 +15,13 @@
  */
 
 /* 
- * File:   bch_http_notify.c
+ * File:   bch_http_notify_callback.c
  * Author: alex
  *
- * Created on January 31, 2021, 11:55 AM
+ * Created on February 5, 2021, 12:22 PM
  */
 
-#include "bch_http_notify.h"
+#include "bch_http_notify_callback.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -31,8 +31,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-static uint16_t notify_tcp_port = 0;
-static int notify_sock = -1;
+#include "bch_data.h"
+
 static const char* notify_req_template = "GET /?%lld HTTP/1.1\r\nHost: 127.0.0.1:%d\r\n\r\n";
 
 static json_t* parse_headers(const char* headers, int headers_len) {
@@ -95,7 +95,7 @@ static bch_resp* create_resp(void* request, int http_status,
         return NULL;
     }
 
-    resp->r = request;
+    resp->request = request;
     resp->status = http_status;
     resp->headers = headers_json;
     resp->data = data_cp;
@@ -135,22 +135,34 @@ static int http_resp_received(char* buf, size_t len) {
     }
 }
 
-static int write_to_socket(bch_resp* resp, int sock, uint16_t port);
+static int write_to_socket(bch_resp* resp);
 
 static int reopen_and_write(bch_resp* resp) {
-    close(notify_sock);
-    notify_sock = open_socket(notify_tcp_port);
-    if (notify_sock < 0) {
+    bch_loc_ctx* ctx = resp->request->ctx;
+    close(ctx->notify_sock);
+    ctx->notify_sock = 0;
+    int sock = open_socket(ctx->notify_port);
+    if (sock < 0) {
         return -1;
     }
-    return write_to_socket(resp, notify_sock, notify_tcp_port);
+    ctx->notify_sock = sock;
+    return write_to_socket(resp);
 }
 
-static int write_to_socket(bch_resp* resp, int sock, uint16_t port) {
+static int write_to_socket(bch_resp* resp) {
+    bch_loc_ctx* ctx = resp->request->ctx;
+    if (0 == ctx->notify_sock) {
+        int sock = open_socket(ctx->notify_port);
+        if (sock < 0) {
+            return -1;
+        }
+        ctx->notify_sock = sock;
+    }
+    
     // prepare req
     uint64_t ptr = (uint64_t) resp;
     char notify_req[128];
-    int req_len = snprintf(notify_req, sizeof(notify_req), notify_req_template, ptr, port);
+    int req_len = snprintf(notify_req, sizeof(notify_req), notify_req_template, ptr, ctx->notify_port);
     if (req_len >= (int) sizeof(notify_req)) {
         return -1;
     }
@@ -159,7 +171,7 @@ static int write_to_socket(bch_resp* resp, int sock, uint16_t port) {
     size_t to_send = req_len;
     size_t idx = 0;
     while (idx < to_send) {
-        int written = write(sock, notify_req + idx, to_send - idx);
+        int written = write(ctx->notify_sock, notify_req + idx, to_send - idx);
         if (-1 == written) {
             return -1;
         }
@@ -170,7 +182,7 @@ static int write_to_socket(bch_resp* resp, int sock, uint16_t port) {
     char buf[512];
     size_t len = 0;
     while (!http_resp_received(buf, len)) {
-        int rread = read(sock, buf + len, sizeof(buf) - len);
+        int rread = read(ctx->notify_sock, buf + len, sizeof(buf) - len);
         if (-1 == rread) {
             return -1;
         }
@@ -200,26 +212,9 @@ static int write_to_socket(bch_resp* resp, int sock, uint16_t port) {
     return (int) status;
 }
 
-int bch_http_notify_init(int tcp_port) {
-    notify_tcp_port = (uint16_t) tcp_port;
-    return 0;
-}
-
 int bch_http_notify_callback(void* request, int http_status,
         const char* headers, int headers_len,
         const char* data, int data_len) {
-
-    // open socket on first call or after error
-    if (notify_sock < 0) {
-        if (0 == notify_tcp_port) {
-            return -1;
-        }
-        int sock = open_socket(notify_tcp_port);
-        if (sock < 0) {
-            return -1;
-        }
-        notify_sock = sock;
-    }
 
     // copy resp
     bch_resp* resp = create_resp(request, http_status, headers, headers_len, data, data_len);
@@ -228,10 +223,10 @@ int bch_http_notify_callback(void* request, int http_status,
     }
 
     // write to socket
-    int status = write_to_socket(resp, notify_sock, notify_tcp_port);
+    int status = write_to_socket(resp);
     if (200 != status) {
-        close(notify_sock);
-        notify_sock = -1;
+        close(resp->request->ctx->notify_sock);
+        resp->request->ctx = 0;
         free(resp->data);
         json_decref(resp->headers);
         free(resp);
