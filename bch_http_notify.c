@@ -135,6 +135,17 @@ static int http_resp_received(char* buf, size_t len) {
     }
 }
 
+static int write_to_socket(bch_resp* resp, int sock, uint16_t port);
+
+static int reopen_and_write(bch_resp* resp) {
+    close(notify_sock);
+    notify_sock = open_socket(notify_tcp_port);
+    if (notify_sock < 0) {
+        return -1;
+    }
+    return write_to_socket(resp, notify_sock, notify_tcp_port);
+}
+
 static int write_to_socket(bch_resp* resp, int sock, uint16_t port) {
     // prepare req
     uint64_t ptr = (uint64_t) resp;
@@ -162,6 +173,10 @@ static int write_to_socket(bch_resp* resp, int sock, uint16_t port) {
         int rread = read(sock, buf + len, sizeof(buf) - len);
         if (-1 == rread) {
             return -1;
+        }
+        if (0 == rread) {
+            // see: https://nginx.org/en/docs/http/ngx_http_core_module.html#keepalive_requests
+            return reopen_and_write(resp);
         }
         len += rread;
     }
