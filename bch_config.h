@@ -24,9 +24,14 @@
 #ifndef BCH_CONFIG_H
 #define BCH_CONFIG_H
 
+#include <ngx_config.h>
+#include <ngx_core.h>
+
 typedef struct bch_config {
-    
+    ngx_str_t libname;
+    ngx_str_t appconf;
 } bch_config;
+
 
 #endif /* BCH_CONFIG_H */
 

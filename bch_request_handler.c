@@ -168,7 +168,10 @@ ngx_int_t bch_request_handler_init(ngx_log_t* log, ngx_str_t libname) {
     return NGX_OK;
 }
 
-ngx_int_t bch_request_handler(ngx_http_request_t *r) {
+ngx_int_t bch_request_handler(bch_config* conf, ngx_http_request_t* r) {
+
+    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "1; [%s]", conf->appconf.data);
+    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "2; [%s]", conf->libname.data);
 
     // http://mailman.nginx.org/pipermail/nginx/2007-August/001559.html
     r->request_body_in_single_buf = 1;
