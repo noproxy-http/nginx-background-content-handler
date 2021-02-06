@@ -28,7 +28,9 @@
 /* Bring in the cmake-detected defines */
 #define HAVE_STDINT_H 1
 /* #undef HAVE_INTTYPES_H */
+#ifndef _WIN32
 #define HAVE_SYS_TYPES_H 1
+#endif // !_WIN32
 
 /* Include our standard type header for the integer typedef */
 
@@ -47,13 +49,21 @@
 #ifdef __cplusplus
 #define JSON_INLINE inline
 #else
+#ifndef _WIN32
 #define JSON_INLINE inline
+#else // _WIN32
+#define JSON_INLINE __inline
+#endif // !_WIN32
 #endif
 
 
 #define json_int_t int64_t
 #define json_strtoint strtoll
+#ifndef _WIN32
 #define JSON_INTEGER_FORMAT "lld"
+#else // _WIN32
+#define JSON_INTEGER_FORMAT "I64d"
+#endif // !_WIN32
 
 
 /* If locale.h and localeconv() are available, define to 1, otherwise to 0. */

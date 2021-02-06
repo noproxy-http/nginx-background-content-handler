@@ -34,11 +34,17 @@ typedef int (*bch_send_response_type)(
         const char* headers, int headers_len,
         const char* data, int data_len);
 
+#ifdef _WIN32
+__declspec( dllexport )
+#endif // _WIN32
 int bch_initialize(
         bch_send_response_type response_callback,
         const char* hanler_config,
         int hanler_config_len);
 
+#ifdef _WIN32
+__declspec( dllexport )
+#endif // _WIN32
 int bch_receive_request(
         void* request,
         const char* metadata, int metadata_len,

@@ -21,6 +21,10 @@
  * Created on February 4, 2021, 6:26 PM
  */
 
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
+
 #include "bch_http_notify_handler.h"
 
 #include <stdint.h>
@@ -150,6 +154,9 @@ static ngx_int_t send_buffer(ngx_http_request_t* r, ngx_buf_t* buf) {
     return NGX_OK;
 }
 
+#ifdef _WIN32
+#pragma warning( disable: 4706 )
+#endif // _WIN32
 static ngx_int_t send_client_resp(bch_resp* resp) {
     ngx_http_request_t* r = resp->request->r;
 
@@ -193,6 +200,9 @@ static ngx_int_t send_client_resp(bch_resp* resp) {
         ngx_http_finalize_request(r, NGX_ERROR);
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
+#ifdef _WIN32
+#pragma warning( default: 4706 )
+#endif // _WIN32
 }
 
 ngx_int_t bch_http_notify_handler(ngx_http_request_t *r) {

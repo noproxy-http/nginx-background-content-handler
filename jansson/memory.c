@@ -6,6 +6,10 @@
  * under the terms of the MIT license. See LICENSE for details.
  */
 
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
+
 #include <stdlib.h>
 #include <string.h>
 

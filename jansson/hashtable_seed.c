@@ -2,7 +2,15 @@
    the hash function.
 */
 
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
+
 #include "bch_jansson.h"
+#ifdef _WIN32
+#pragma warning( disable: 4505 )
+#pragma warning( disable: 4701 )
+#endif // _WIN32
 
 #ifdef HAVE_CONFIG_H
 #include <jansson_private_config.h>

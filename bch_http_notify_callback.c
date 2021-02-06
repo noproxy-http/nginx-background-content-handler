@@ -21,20 +21,32 @@
  * Created on February 5, 2021, 12:22 PM
  */
 
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
+
 #include "bch_http_notify_callback.h"
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef _WIN32
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#else // !_WIN32
+#include <winsock2.h>
+#define close closesocket
+#endif // _WIN32
 
 #include "bch_data.h"
 
 static const char* notify_req_template = "GET /?%lld HTTP/1.1\r\nHost: 127.0.0.1:%d\r\n\r\n";
 
+#ifdef _WIN32
+#pragma warning( disable: 4706 )
+#endif // _WIN32
 static json_t* parse_headers(const char* headers, int headers_len) {
     // parse
     size_t ulen = headers_len;
@@ -59,6 +71,9 @@ static json_t* parse_headers(const char* headers, int headers_len) {
     }
 
     return root;
+#ifdef _WIN32
+#pragma warning( default: 4706 )
+#endif // _WIN32
 }
 
 static bch_resp* create_resp(void* request, int http_status,
@@ -110,6 +125,14 @@ static int open_socket(uint16_t port) {
         return sock;
     }
 
+    struct linger sl;
+    sl.l_onoff = 1;     /* non-zero value enables linger option in kernel */
+    sl.l_linger = 0;    /* timeout interval in seconds */
+    int err_linger = setsockopt(sock, SOL_SOCKET, SO_LINGER, (char*) &sl, sizeof(sl));
+    if (0 != err_linger) {
+        return err_linger;
+    } 
+
     struct sockaddr_in addr;
     memset(&addr, '\0', sizeof(addr));
     addr.sin_family = AF_INET;
@@ -133,6 +156,21 @@ static int http_resp_received(char* buf, size_t len) {
     } else {
         return 0;
     }
+}
+
+static int conn_closed(int rread) {
+#ifndef _WIN32
+return 0 == rread;
+#else // !_WIN32
+if (0 == rread) {
+    return 1;
+}
+if (SOCKET_ERROR == rread) {
+    int wsa_err = WSAGetLastError();
+    return WSAECONNABORTED == wsa_err;
+}
+return 0;
+#endif // _WIN32
 }
 
 static int write_to_socket(bch_resp* resp);
@@ -171,7 +209,7 @@ static int write_to_socket(bch_resp* resp) {
     size_t to_send = req_len;
     size_t idx = 0;
     while (idx < to_send) {
-        int written = write(ctx->notify_sock, notify_req + idx, to_send - idx);
+        int written = send(ctx->notify_sock, notify_req + idx, to_send - idx, 0);
         if (-1 == written) {
             return -1;
         }
@@ -182,13 +220,14 @@ static int write_to_socket(bch_resp* resp) {
     char buf[512];
     size_t len = 0;
     while (!http_resp_received(buf, len)) {
-        int rread = read(ctx->notify_sock, buf + len, sizeof(buf) - len);
-        if (-1 == rread) {
-            return -1;
-        }
-        if (0 == rread) {
+        int rread = recv(ctx->notify_sock, buf + len, sizeof(buf) - len, 0);
+        fprintf(stderr, "read: [%d]\n", rread);
+        if (conn_closed(rread)) {
             // see: https://nginx.org/en/docs/http/ngx_http_core_module.html#keepalive_requests
             return reopen_and_write(resp);
+        }
+        if (-1 == rread) {
+            return -1;
         }
         len += rread;
     }
@@ -209,6 +248,11 @@ static int write_to_socket(bch_resp* resp) {
         return -1;
     }
 
+    // todo: removeme
+    //close(resp->request->ctx->notify_sock);
+    //resp->request->ctx->notify_sock = 0;
+    // end: removeme
+
     return (int) status;
 }
 
@@ -226,7 +270,7 @@ int bch_http_notify_callback(void* request, int http_status,
     int status = write_to_socket(resp);
     if (200 != status) {
         close(resp->request->ctx->notify_sock);
-        resp->request->ctx = 0;
+        resp->request->ctx->notify_sock = 0;
         free(resp->data);
         json_decref(resp->headers);
         free(resp);

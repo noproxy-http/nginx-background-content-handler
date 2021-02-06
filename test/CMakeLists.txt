@@ -22,4 +22,6 @@ add_library( ${PROJECT_NAME} SHARED test_app.cpp )
 
 target_include_directories ( ${PROJECT_NAME} BEFORE PRIVATE ${CMAKE_CURRENT_LIST_DIR}/.. )
 
-target_link_libraries ( ${PROJECT_NAME} PRIVATE pthread )
+if ( ${CMAKE_CXX_COMPILER_ID}x MATCHES "GNU" )
+    target_link_libraries ( ${PROJECT_NAME} PRIVATE pthread )
+endif ( )

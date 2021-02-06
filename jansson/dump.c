@@ -5,6 +5,10 @@
  * it under the terms of the MIT license. See LICENSE for details.
  */
 
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
+
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif

@@ -1,3 +1,10 @@
+
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
+
+#include "bch_jansson.h"
+
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
@@ -8,8 +15,6 @@
 #endif
 #include "jansson_private.h"
 #include "strbuffer.h"
-
-#include "bch_jansson.h"
 
 /* need jansson_private_config.h to get the correct snprintf */
 #ifdef HAVE_CONFIG_H

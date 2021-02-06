@@ -5,7 +5,14 @@
  * it under the terms of the MIT license. See LICENSE for details.
  */
 
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
+
 #include "bch_jansson.h"
+#ifdef _WIN32
+#pragma warning( disable: 4334 )
+#endif // _WIN32
 
 #ifdef HAVE_CONFIG_H
 #include <jansson_private_config.h>

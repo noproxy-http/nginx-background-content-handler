@@ -28,7 +28,6 @@
 #include <string>
 #include <thread>
 
-
 namespace { // anonymous
 
 bch_send_response_type send_response = nullptr;
@@ -58,7 +57,7 @@ int bch_receive_request(void* request,
 
     std::thread([request, meta, data_st] () {
         std::cerr << "notifying ..."  << std::endl;
-        int err = send_response(request, 200, "{}", 2, meta.c_str(), meta.length());
+        int err = send_response(request, 200, "{}", 2, meta.c_str(), static_cast<int>(meta.length()));
         std::cerr << "notified: " << err  << std::endl;
     }).detach();
 

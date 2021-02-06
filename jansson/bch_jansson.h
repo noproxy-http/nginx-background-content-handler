@@ -28,5 +28,14 @@
 #define VALGRIND 1
 #define JANSSON_USING_CMAKE
 
+#ifdef _WIN32
+#pragma warning( disable: 4189 )
+#pragma warning( disable: 4101 )
+#pragma warning( disable: 4204 )
+#pragma warning( disable: 4701 )
+#pragma warning( disable: 4702 )
+#pragma warning( disable: 4706 )
+#endif // _WIN32
+
 #endif /* BCH_JANSSON_H */
 

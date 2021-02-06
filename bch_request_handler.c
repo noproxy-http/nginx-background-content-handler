@@ -21,10 +21,15 @@
  * Created on February 2, 2021, 12:38 PM
  */
 
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
+
 #include "bch_request_handler.h"
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "jansson.h"
 
@@ -103,20 +108,37 @@ ngx_int_t init(ngx_log_t* log, bch_loc_ctx* ctx) {
         return NGX_ERROR;
     }
 
+    char* libname_noesc = malloc(ctx->libname.len + 1);
+    if (NULL == libname_noesc) {
+        ngx_log_error(NGX_LOG_ERR, log, 0,
+                "'bch_request_handler_init': alloc failed, size [%d]", ctx->libname.len);
+        return NGX_ERROR;
+    }
+    memset(libname_noesc, '\0', ctx->libname.len + 1);
+    size_t j = 0;
+    for (size_t i = 0; i < ctx->libname.len; i++) {
+        char ch = ctx->libname.data[i];
+        if (!('\\' == ch && i < ctx->libname.len - 1 && ' ' == ctx->libname.data[i + 1])) {
+            libname_noesc[j] = ch;
+            j++;
+        }
+    }
+
     // load lib, conf values are NUL-terminated
-    void* lib = bch_dyload_library(log, (const char*)ctx->libname.data);
+    void* lib = bch_dyload_library(log, libname_noesc);
+    free(libname_noesc);
     if (NULL == lib) {
         return NGX_ERROR;
     }
 
     // lookup init
-    bch_initialize_type init_fun = bch_dyload_symbol(log, lib, "bch_initialize");
+    bch_initialize_type init_fun = (bch_initialize_type) bch_dyload_symbol(log, lib, "bch_initialize");
     if (NULL == init_fun) {
         return NGX_ERROR;
     }
 
     // lookup receive
-    ctx->receive_request_fun = bch_dyload_symbol(log, lib, "bch_receive_request");
+    ctx->receive_request_fun = (bch_receive_request_type) bch_dyload_symbol(log, lib, "bch_receive_request");
     if (NULL == ctx->receive_request_fun) {
         return NGX_ERROR;
     }
