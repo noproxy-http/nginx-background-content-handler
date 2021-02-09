@@ -221,7 +221,6 @@ static int write_to_socket(bch_resp* resp) {
     size_t len = 0;
     while (!http_resp_received(buf, len)) {
         int rread = recv(ctx->notify_sock, buf + len, sizeof(buf) - len, 0);
-        fprintf(stderr, "read: [%d]\n", rread);
         if (conn_closed(rread)) {
             // see: https://nginx.org/en/docs/http/ngx_http_core_module.html#keepalive_requests
             return reopen_and_write(resp);

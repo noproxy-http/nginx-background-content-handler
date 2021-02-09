@@ -100,6 +100,23 @@ static json_t* create_meta(ngx_http_request_t* r) {
     return res;
 }
 
+static char* unescape_spaces(ngx_str_t str) {
+    char* res = malloc(str.len + 1);
+    if (NULL == res) {
+        return NULL;
+    }
+    memset(res, '\0', str.len + 1);
+    size_t j = 0;
+    for (size_t i = 0; i < str.len; i++) {
+        char ch = str.data[i];
+        if (!('\\' == ch && i < str.len - 1 && ' ' == str.data[i + 1])) {
+            res[j] = ch;
+            j++;
+        }
+    }
+    return res;
+}
+
 ngx_int_t init(ngx_log_t* log, bch_loc_ctx* ctx) {
     // load handler shared lib
     if (0 == ctx->libname.len) {
@@ -108,20 +125,11 @@ ngx_int_t init(ngx_log_t* log, bch_loc_ctx* ctx) {
         return NGX_ERROR;
     }
 
-    char* libname_noesc = malloc(ctx->libname.len + 1);
+    char* libname_noesc = unescape_spaces(ctx->libname);
     if (NULL == libname_noesc) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
                 "'bch_request_handler_init': alloc failed, size [%d]", ctx->libname.len);
         return NGX_ERROR;
-    }
-    memset(libname_noesc, '\0', ctx->libname.len + 1);
-    size_t j = 0;
-    for (size_t i = 0; i < ctx->libname.len; i++) {
-        char ch = ctx->libname.data[i];
-        if (!('\\' == ch && i < ctx->libname.len - 1 && ' ' == ctx->libname.data[i + 1])) {
-            libname_noesc[j] = ch;
-            j++;
-        }
     }
 
     // load lib, conf values are NUL-terminated
@@ -143,8 +151,16 @@ ngx_int_t init(ngx_log_t* log, bch_loc_ctx* ctx) {
         return NGX_ERROR;
     }
 
+    char* appconf_noesc = unescape_spaces(ctx->appconf);
+    if (NULL == appconf_noesc) {
+        ngx_log_error(NGX_LOG_ERR, log, 0,
+                "'bch_request_handler_init': alloc failed, size [%d]", ctx->appconf.len);
+        return NGX_ERROR;
+    }
+
     // call init
-    int err_init = init_fun(bch_http_notify_callback, (const char*) ctx->appconf.data, ctx->appconf.len);
+    int err_init = init_fun(bch_http_notify_callback, appconf_noesc, strlen(appconf_noesc));
+    free(appconf_noesc);
     if (0 != err_init) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
                 "'bch_request_handler_init': application init error, code [%d]", err_init);
