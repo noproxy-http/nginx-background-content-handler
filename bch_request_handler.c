@@ -93,6 +93,17 @@ static json_t* create_meta(ngx_http_request_t* r) {
     json_set_ngx_string(res, "unparsedUri", r->unparsed_uri);
     json_set_ngx_string(res, "method", r->method_name);
     json_set_ngx_string(res, "protocol", r->http_protocol);
+    if (NULL == r->request_body->temp_file) {
+        json_object_set_new(res, "dataTempFile", json_null());
+    } else {
+        ngx_str_t path = r->request_body->temp_file->file.name;
+        json_t* path_json = json_stringn((const char*) path.data, path.len);
+        if (NULL != path_json) {
+            json_object_set_new(res, "dataTempFile", path_json);
+        } else { // cannot happen under normal circumstances, lets not crash
+            json_object_set_new(res, "dataTempFile", json_null());
+        }
+    }
 
     json_t* headers = read_headers(&r->headers_in);
     json_object_set_new(res, "headers", headers);
@@ -202,10 +213,12 @@ static void body_handler(ngx_http_request_t* r) {
     // prepare data
     char* data = NULL;
     int data_len = 0;
-    ngx_chain_t* in = r->request_body->bufs;
-    if (NULL != in && NULL != in->buf) {
-        data = (char*) in->buf->pos;
-        data_len = in->buf->last - in->buf->pos;
+    if (NULL == r->request_body->temp_file) {
+        ngx_chain_t* in = r->request_body->bufs;
+        if (NULL != in && NULL != in->buf) {
+            data = (char*) in->buf->pos;
+            data_len = in->buf->last - in->buf->pos;
+        }
     }
 
     // prepare request
