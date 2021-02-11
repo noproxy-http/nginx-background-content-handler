@@ -353,7 +353,6 @@ static ngx_int_t send_client_resp(bch_resp* resp) {
     ngx_int_t err_send = send_buffer(r, buf);
     if (NGX_OK == err_send) {
         ngx_http_finalize_request(r, NGX_HTTP_OK);
-        ngx_http_run_posted_requests(r->connection);
         return NGX_HTTP_OK;
     } else {
         ngx_http_finalize_request(r, NGX_ERROR);

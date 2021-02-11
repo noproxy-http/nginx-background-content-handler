@@ -30,8 +30,6 @@
 #include "bch_http_notify_handler.h"
 #include "bch_request_handler.h"
 
-static ngx_int_t init(ngx_cycle_t* cycle);
-
 static void* bch_create_loc_conf(ngx_conf_t* cf) {
     bch_loc_ctx* ctx = ngx_pcalloc(cf->pool, sizeof(bch_loc_ctx));
     if (NULL == ctx) {

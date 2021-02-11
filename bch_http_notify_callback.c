@@ -203,9 +203,9 @@ static int write_to_socket(bch_resp* resp, int retry) {
     // read
     char buf[512];
     size_t len = 0;
-    while (!http_resp_received(buf, len)) {
+    do {
         int rread = recv(ctx->notify_sock, buf + len, sizeof(buf) - len, 0);
-        if (-1 == rread) {
+        if (-1 == rread || 0 == rread) {
             if (retry > 0) {
                 return close_and_retry(resp);
             } else {
@@ -213,7 +213,7 @@ static int write_to_socket(bch_resp* resp, int retry) {
             }
         }
         len += rread;
-    }
+    } while (!http_resp_received(buf, len));
 
     // parse status
     // HTTP/1.1 200
