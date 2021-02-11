@@ -31,6 +31,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef _WIN32
+#include <fcntl.h>
+#include <sys/stat.h>
+#else //_WIN32
+#include <windows.h>
+#define close CloseHandle
+#endif // !_WIN32
+
 #include "jansson.h"
 
 #include "bch_data.h"
@@ -131,25 +139,78 @@ static ngx_int_t add_headers(bch_resp* resp, const char** data_file_out) {
 #endif // _WIN32
 }
 
+#ifdef _WIN32
+static int widen(const char* st, wchar_t** out) {
+    size_t len = strlen(st);
+    int size_needed = MultiByteToWideChar(CP_UTF8, 0, st, len, NULL, 0);
+    if (0 == size_needed) {
+        return GetLastError();
+    }
+    size_t buf_len = sizeof(wchar_t) * (size_needed + 1);
+    wchar_t* buf = malloc(buf_len);
+    if (NULL == buf) {
+        return -1;
+    }
+    memset(buf, '\0', buf_len);
+    int chars_copied = MultiByteToWideChar(CP_UTF8, 0, st, len, buf, size_needed);
+    if (chars_copied != size_needed) {
+        free(buf);
+        return GetLastError();
+    }
+    *out = buf;
+    return 0;
+}
+#endif // _WIN32
+
 static ngx_temp_file_t* create_temp_file(ngx_http_request_t* r, const char* data_file, size_t* data_file_len) {
     // open file
-    struct stat st;
-    int err_stat = stat(data_file, &st);
-    if (0 != err_stat) {
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': cannot stat response file, path: [%s]", data_file);
-        return NULL;
-    }
+#ifndef _WIN32
     ngx_fd_t fd = open(data_file, O_RDONLY);
     if (-1 == fd) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                 "'bch_http_notify': cannot open response file, path: [%s]", data_file);
         return NULL;
     }
+    struct stat st;
+    int err_stat = stat(data_file, &st);
+    if (0 != err_stat) {
+        close(fd);
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                "'bch_http_notify': cannot stat response file, path: [%s]", data_file);
+        return NULL;
+    }
+    size_t st_size = st.st_size;
+#else // _WIN32
+    wchar_t* wname = NULL;
+    int err_widen = widen(data_file, &wname);
+    if (0 != err_widen) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                "'bch_http_notify': file name widen error, code: [%d]", err_widen);
+        return NULL;
+    }
+    HANDLE fd = CreateFileW(wname, GENERIC_READ, 
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (INVALID_HANDLE_VALUE == fd) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                "'bch_http_notify': cannot open response file, path: [%s]", data_file);
+        return NULL;
+    }
+    LARGE_INTEGER wsize;
+    BOOL err_size = GetFileSizeEx(fd, &wsize);
+    if (0 == err_size) {
+        close(fd);
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                "'bch_http_notify': cannot stat response file, path: [%s]", data_file);
+        return NULL;
+    }
+    size_t st_size = (size_t) wsize.QuadPart;
+#endif //!_WIN32
 
     // temp file
     ngx_temp_file_t* tf = ngx_pcalloc(r->pool, sizeof(ngx_temp_file_t));
     if (tf == NULL) {
+        close(fd);
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                 "'bch_http_notify': error allocating buffer, size: [%l]", sizeof(ngx_temp_file_t));
         return NULL;
@@ -162,6 +223,7 @@ static ngx_temp_file_t* create_temp_file(ngx_http_request_t* r, const char* data
     // cleanup
     u_char* name_cleanup = ngx_pcalloc(r->pool, strlen(data_file) + 1);
     if (NULL == name_cleanup) {
+        close(fd);
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                 "'bch_http_notify': error allocating buffer, size: [%d]", strlen(data_file) + 1);
         return NULL;
@@ -169,6 +231,7 @@ static ngx_temp_file_t* create_temp_file(ngx_http_request_t* r, const char* data
     memcpy(name_cleanup, data_file, strlen(data_file));
     ngx_pool_cleanup_t* cln = ngx_pool_cleanup_add(r->pool, sizeof(ngx_pool_cleanup_file_t));
     if (cln == NULL) {
+        close(fd);
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                 "'bch_http_notify': error creating reponse file cleanup struct]");
         return NULL;
@@ -180,7 +243,7 @@ static ngx_temp_file_t* create_temp_file(ngx_http_request_t* r, const char* data
     clnf->log = r->connection->log;
 
     // content size
-    *data_file_len = st.st_size;
+    *data_file_len = st_size;
 
     return tf;
 }

@@ -158,41 +158,21 @@ static int http_resp_received(char* buf, size_t len) {
     }
 }
 
-static int conn_closed(int rread) {
-#ifndef _WIN32
-return 0 == rread;
-#else // !_WIN32
-if (0 == rread) {
-    return 1;
-}
-if (SOCKET_ERROR == rread) {
-    int wsa_err = WSAGetLastError();
-    return WSAECONNABORTED == wsa_err;
-}
-return 0;
-#endif // _WIN32
-}
+static int write_to_socket(bch_resp* resp, int retry);
 
-static int write_to_socket(bch_resp* resp);
-
-static int reopen_and_write(bch_resp* resp) {
+static int close_and_retry(bch_resp* resp) {
     bch_loc_ctx* ctx = resp->request->ctx;
     close(ctx->notify_sock);
     ctx->notify_sock = 0;
-    int sock = open_socket(ctx->notify_port);
-    if (sock < 0) {
-        return -1;
-    }
-    ctx->notify_sock = sock;
-    return write_to_socket(resp);
+    return write_to_socket(resp, 0);
 }
 
-static int write_to_socket(bch_resp* resp) {
+static int write_to_socket(bch_resp* resp, int retry) {
     bch_loc_ctx* ctx = resp->request->ctx;
     if (0 == ctx->notify_sock) {
         int sock = open_socket(ctx->notify_port);
         if (sock < 0) {
-            return -1;
+            return -2;
         }
         ctx->notify_sock = sock;
     }
@@ -202,7 +182,7 @@ static int write_to_socket(bch_resp* resp) {
     char notify_req[128];
     int req_len = snprintf(notify_req, sizeof(notify_req), notify_req_template, ptr, ctx->notify_port);
     if (req_len >= (int) sizeof(notify_req)) {
-        return -1;
+        return -3;
     }
 
     // write
@@ -211,7 +191,11 @@ static int write_to_socket(bch_resp* resp) {
     while (idx < to_send) {
         int written = send(ctx->notify_sock, notify_req + idx, to_send - idx, 0);
         if (-1 == written) {
-            return -1;
+            if (retry > 0) {
+                return close_and_retry(resp);
+            } else {
+                return -4;
+            }
         }
         idx += written;
     }
@@ -221,12 +205,12 @@ static int write_to_socket(bch_resp* resp) {
     size_t len = 0;
     while (!http_resp_received(buf, len)) {
         int rread = recv(ctx->notify_sock, buf + len, sizeof(buf) - len, 0);
-        if (conn_closed(rread)) {
-            // see: https://nginx.org/en/docs/http/ngx_http_core_module.html#keepalive_requests
-            return reopen_and_write(resp);
-        }
         if (-1 == rread) {
-            return -1;
+            if (retry > 0) {
+                return close_and_retry(resp);
+            } else {
+                return -5;
+            }
         }
         len += rread;
     }
@@ -235,7 +219,7 @@ static int write_to_socket(bch_resp* resp) {
     // HTTP/1.1 200
     // 0123456789012
     if (len < 12) {
-        return -1;
+        return -6;
     }
     char status_buf[4];
     memset(&status_buf, '\0', sizeof(status_buf));
@@ -244,13 +228,8 @@ static int write_to_socket(bch_resp* resp) {
     char* endptr;
     long status = strtol(status_buf, &endptr, 0);
     if (status_buf + 3 != endptr) {
-        return -1;
+        return -7;
     }
-
-    // todo: removeme
-    //close(resp->request->ctx->notify_sock);
-    //resp->request->ctx->notify_sock = 0;
-    // end: removeme
 
     return (int) status;
 }
@@ -266,10 +245,11 @@ int bch_http_notify_callback(void* request, int http_status,
     }
 
     // write to socket
-    int status = write_to_socket(resp);
+    int status = write_to_socket(resp, 1);
     if (200 != status) {
-        close(resp->request->ctx->notify_sock);
-        resp->request->ctx->notify_sock = 0;
+        bch_loc_ctx* ctx = resp->request->ctx;
+        close(ctx->notify_sock);
+        ctx->notify_sock = 0;
         free(resp->data);
         json_decref(resp->headers);
         free(resp);
