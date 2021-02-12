@@ -297,7 +297,6 @@ static ngx_int_t send_buffer(ngx_http_request_t* r, ngx_buf_t* buf) {
     if (NGX_OK != err_headers) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                 "'bch_http_notify': error sending headers, code: [%d]", err_headers);
-        ngx_http_finalize_request(r, NGX_ERROR);
         return err_headers;
     }
 
@@ -309,7 +308,6 @@ static ngx_int_t send_buffer(ngx_http_request_t* r, ngx_buf_t* buf) {
     if (NGX_OK != err_filters && NGX_AGAIN != err_filters) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                 "'bch_http_notify': error sending data, code: [%d]", err_filters);
-        ngx_http_finalize_request(r, NGX_ERROR);
         return err_filters;
     }
 
@@ -350,14 +348,18 @@ static ngx_int_t send_client_resp(bch_resp* resp) {
         r->headers_out.content_length_n = data_file_len;
     }
 
+    // finalize
     ngx_int_t err_send = send_buffer(r, buf);
-    if (NGX_OK == err_send) {
-        ngx_http_finalize_request(r, NGX_HTTP_OK);
-        return NGX_HTTP_OK;
+    ngx_connection_t* c = r->connection;
+    ngx_int_t rc = NGX_OK == err_send ? NGX_HTTP_OK : NGX_ERROR;
+    ngx_http_finalize_request(r, rc);
+    if (!c->error) {
+        ngx_http_run_posted_requests(c);
     } else {
-        ngx_http_finalize_request(r, NGX_ERROR);
-        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+        ngx_log_error(NGX_LOG_ERR, c->log, 0,
+                "'bch_http_notify': client connection error on sending response");
     }
+    return rc;
 }
 
 ngx_int_t bch_http_notify_handler(ngx_http_request_t *r) {
@@ -369,10 +371,12 @@ ngx_int_t bch_http_notify_handler(ngx_http_request_t *r) {
         status = NGX_HTTP_INTERNAL_SERVER_ERROR;
     } else {
         status = send_client_resp(resp);
-        if (200 == status) {
+        if (NGX_HTTP_OK == status) {
             free(resp->data);
             json_decref(resp->headers);
             free(resp);
+        } else {
+            status = NGX_HTTP_BAD_GATEWAY;
         }
     }
 
