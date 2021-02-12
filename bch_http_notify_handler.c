@@ -260,13 +260,16 @@ static ngx_buf_t* create_client_buf(bch_resp* resp, const char* data_file, size_
 
     if (NULL == data_file) {
         if (resp->data_len > 0) {
-            buf->pos = ngx_pcalloc(r->pool, resp->data_len);
-            if (NULL == buf->pos) {
+            ngx_pool_cleanup_t* cln = ngx_pool_cleanup_add(r->pool, sizeof(char*));
+            if (cln == NULL) {
                 ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                        "'bch_http_notify': error allocating buffer, size: [%l]", resp->data_len);
+                        "'bch_http_notify': error creating response data cleanup struct");
                 return NULL;
             }
-            memcpy(buf->pos, resp->data, resp->data_len);
+            cln->handler = resp->request->ctx->free_response_data_fun;
+            cln->data = resp->data;
+
+            buf->pos = resp->data;
             buf->last = buf->pos + resp->data_len;
             buf->start = buf->pos;
             buf->end = buf->last;
@@ -359,7 +362,7 @@ static ngx_int_t send_client_resp(bch_resp* resp) {
         ngx_log_error(NGX_LOG_ERR, c->log, 0,
                 "'bch_http_notify': client connection error on sending response");
     }
-    return rc;
+    return rc == NGX_HTTP_OK ? NGX_HTTP_OK : NGX_HTTP_BAD_GATEWAY;
 }
 
 ngx_int_t bch_http_notify_handler(ngx_http_request_t *r) {
@@ -371,12 +374,9 @@ ngx_int_t bch_http_notify_handler(ngx_http_request_t *r) {
         status = NGX_HTTP_INTERNAL_SERVER_ERROR;
     } else {
         status = send_client_resp(resp);
-        if (NGX_HTTP_OK == status) {
-            free(resp->data);
+        if (NGX_HTTP_OK == status || NGX_HTTP_BAD_GATEWAY == status) {
             json_decref(resp->headers);
             free(resp);
-        } else {
-            status = NGX_HTTP_BAD_GATEWAY;
         }
     }
 

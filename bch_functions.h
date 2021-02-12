@@ -32,7 +32,7 @@ typedef int (*bch_send_response_type)(
         void* request,
         int http_status,
         const char* headers, int headers_len,
-        const char* data, int data_len);
+        char* data, int data_len);
 
 #ifdef _WIN32
 __declspec( dllexport )
@@ -50,6 +50,11 @@ int bch_receive_request(
         const char* metadata, int metadata_len,
         const char* data, int data_len);
 
+#ifdef _WIN32
+__declspec( dllexport )
+#endif // _WIN32
+void bch_free_response_data(
+        void* data);
 
 #ifdef __cplusplus
 }

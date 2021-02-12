@@ -78,7 +78,7 @@ static json_t* parse_headers(const char* headers, int headers_len) {
 
 static bch_resp* create_resp(void* request, int http_status,
         const char* headers, int headers_len,
-        const char* data, int data_len) {
+        char* data, int data_len) {
     if (NULL == request) {
         return NULL;
     }
@@ -89,23 +89,13 @@ static bch_resp* create_resp(void* request, int http_status,
     if (data_len < 0) {
         return NULL;
     } 
-    u_char* data_cp = NULL;
-    if (data_len > 0 && NULL != data) {
-        data_cp = malloc(data_len);
-        if (NULL == data_cp) {
-            return NULL;
-        }
-        memcpy(data_cp, data, data_len);
-    }
 
     json_t* headers_json = parse_headers(headers, headers_len);
     if (NULL == headers_json) {
-        free(data_cp);
         return NULL;
     }
     bch_resp* resp = malloc(sizeof(bch_resp));
     if (NULL == resp) {
-        free(data_cp);
         json_decref(headers_json);
         return NULL;
     }
@@ -113,7 +103,7 @@ static bch_resp* create_resp(void* request, int http_status,
     resp->request = request;
     resp->status = http_status;
     resp->headers = headers_json;
-    resp->data = data_cp;
+    resp->data = (u_char*) data;
     resp->data_len = (size_t) data_len;
 
     return resp;
@@ -236,23 +226,39 @@ static int write_to_socket(bch_resp* resp, int retry) {
 
 int bch_http_notify_callback(void* request, int http_status,
         const char* headers, int headers_len,
-        const char* data, int data_len) {
+        char* data, int data_len) {
 
     // copy resp
     bch_resp* resp = create_resp(request, http_status, headers, headers_len, data, data_len);
     if (NULL == resp) {
         return -1;
     }
+    bch_loc_ctx* ctx = resp->request->ctx;
 
     // write to socket
     int status = write_to_socket(resp, 1);
     if (200 != status) {
-        bch_loc_ctx* ctx = resp->request->ctx;
         close(ctx->notify_sock);
         ctx->notify_sock = 0;
-        free(resp->data);
-        json_decref(resp->headers);
-        free(resp);
+        if (502 != status) {
+            if (NULL != data) {
+                ctx->free_response_data_fun(data);
+            }
+            json_decref(resp->headers);
+            free(resp);
+        }
     }
-    return status;
+
+    // return code
+    if (200 == status) {
+        return 0;
+    } else if (status < 0) {
+        return status;
+    } else if (502 == status) {
+        return 1;
+    } else if (500 == status) {
+        return 2;
+    } else {
+        return 3;
+    }
 }

@@ -156,9 +156,13 @@ ngx_int_t init(ngx_log_t* log, bch_loc_ctx* ctx) {
         return NGX_ERROR;
     }
 
-    // lookup receive
+    // lookup receive and free
     ctx->receive_request_fun = (bch_receive_request_type) bch_dyload_symbol(log, lib, "bch_receive_request");
     if (NULL == ctx->receive_request_fun) {
+        return NGX_ERROR;
+    }
+    ctx->free_response_data_fun = (bch_free_response_data_type) bch_dyload_symbol(log, lib, "bch_free_response_data");
+    if (NULL == ctx->free_response_data_fun) {
         return NGX_ERROR;
     }
 

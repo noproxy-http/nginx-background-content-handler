@@ -39,11 +39,15 @@ typedef int (*bch_receive_request_type)(
         const char* metadata, int metadata_len,
         const char* data, int data_len);
 
+typedef void (*bch_free_response_data_type)(
+        void* data);
+
 typedef struct bch_loc_ctx {
     ngx_str_t libname;
     ngx_str_t appconf;
 
     bch_receive_request_type receive_request_fun;
+    bch_free_response_data_type free_response_data_fun;
 
     uint16_t notify_port;
     int notify_sock;

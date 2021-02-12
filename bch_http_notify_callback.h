@@ -26,7 +26,7 @@
 
 int bch_http_notify_callback(void* request, int http_status,
         const char* headers, int headers_len,
-        const char* data, int data_len);
+        char* data, int data_len);
 
 #endif /* BCH_HTTP_NOTIFY_CALLBACK_H */
 
