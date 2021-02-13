@@ -40,74 +40,12 @@
 #define close closesocket
 #endif // _WIN32
 
+#include "jansson.h"
+
 #include "bch_data.h"
+#include "bch_notify_callback.h"
 
 static const char* notify_req_template = "GET /?%lld HTTP/1.1\r\nHost: 127.0.0.1:%d\r\n\r\n";
-
-#ifdef _WIN32
-#pragma warning( disable: 4706 )
-#endif // _WIN32
-static json_t* parse_headers(const char* headers, int headers_len) {
-    // parse
-    size_t ulen = headers_len;
-    json_t* root = json_loadb(headers, ulen, JSON_REJECT_DUPLICATES, NULL);
-    if (NULL == root) {
-        return NULL;
-    }
-
-    // validate
-    if (!json_is_object(root)) {
-        json_decref(root);
-        return NULL;
-    }
-
-    const char *key;
-    json_t *value;
-    json_object_foreach(root, key, value) {
-        if (0 == strlen(key) || !json_is_string(value)) {
-            json_decref(root);
-            return NULL;
-        }
-    }
-
-    return root;
-#ifdef _WIN32
-#pragma warning( default: 4706 )
-#endif // _WIN32
-}
-
-static bch_resp* create_resp(void* request, int http_status,
-        const char* headers, int headers_len,
-        char* data, int data_len) {
-    if (NULL == request) {
-        return NULL;
-    }
-    if (http_status < 200 || http_status > 599) {
-        return NULL;
-    }
-
-    if (data_len < 0) {
-        return NULL;
-    } 
-
-    json_t* headers_json = parse_headers(headers, headers_len);
-    if (NULL == headers_json) {
-        return NULL;
-    }
-    bch_resp* resp = malloc(sizeof(bch_resp));
-    if (NULL == resp) {
-        json_decref(headers_json);
-        return NULL;
-    }
-
-    resp->request = request;
-    resp->status = http_status;
-    resp->headers = headers_json;
-    resp->data = (u_char*) data;
-    resp->data_len = (size_t) data_len;
-
-    return resp;
-}
 
 static int open_socket(uint16_t port) {
     int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -228,8 +166,8 @@ int bch_http_notify_callback(void* request, int http_status,
         const char* headers, int headers_len,
         char* data, int data_len) {
 
-    // copy resp
-    bch_resp* resp = create_resp(request, http_status, headers, headers_len, data, data_len);
+    // create resp
+    bch_resp* resp = bch_create_resp(request, http_status, headers, headers_len, data, data_len);
     if (NULL == resp) {
         return -1;
     }

@@ -30,6 +30,23 @@
 #include "bch_http_notify_handler.h"
 #include "bch_request_handler.h"
 
+#ifndef _WIN32
+#include "bch_selfpipe_create.h"
+
+int bch_selfpipe_fd_in = 0;
+int bch_selfpipe_fd_out = 0;
+#endif //!_WIN32
+
+static ngx_int_t initialize(ngx_cycle_t* cycle) {
+
+    ngx_int_t err_create = bch_selfpipe_create(cycle, &bch_selfpipe_fd_in, &bch_selfpipe_fd_out);
+    if (NGX_OK != err_create) {
+        return NGX_ERROR;
+    }
+ 
+    return NGX_OK;
+}
+
 static void* bch_create_loc_conf(ngx_conf_t* cf) {
     bch_loc_ctx* ctx = ngx_pcalloc(cf->pool, sizeof(bch_loc_ctx));
     if (NULL == ctx) {
@@ -143,7 +160,7 @@ ngx_module_t ngx_http_background_content_handler_module = {
     NGX_HTTP_MODULE, /* module type */
     NULL, /* init master */
     NULL, /* init module */
-    NULL, /* init process */
+    initialize, /* init process */
     NULL, /* init thread */
     NULL, /* exit thread */
     NULL, /* exit process */

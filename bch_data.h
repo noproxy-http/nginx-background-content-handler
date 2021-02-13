@@ -34,6 +34,11 @@
 
 extern ngx_module_t ngx_http_background_content_handler_module;
 
+#ifndef _WIN32
+extern int bch_selfpipe_fd_in;
+extern int bch_selfpipe_fd_out;
+#endif //!_WIN32
+
 typedef int (*bch_receive_request_type)(
         void* request,
         const char* metadata, int metadata_len,

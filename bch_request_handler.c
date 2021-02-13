@@ -38,6 +38,10 @@
 #include "bch_functions.h"
 #include "bch_http_notify_callback.h"
 
+#ifndef _WIN32
+#include "bch_selfpipe_notify_callback.h"
+#endif //!_WIN32
+
 typedef int (*bch_initialize_type)(
         bch_send_response_type response_callback,
         const char* hanler_config,
@@ -173,8 +177,15 @@ ngx_int_t init(ngx_log_t* log, bch_loc_ctx* ctx) {
         return NGX_ERROR;
     }
 
+    bch_send_response_type notify_cb = bch_http_notify_callback;
+#ifndef _WIN32
+    if (0 == ctx->notify_port) {
+        notify_cb = bch_selfpipe_notify_callback;
+    }
+#endif //!_WIN32
+
     // call init
-    int err_init = init_fun(bch_http_notify_callback, appconf_noesc, strlen(appconf_noesc));
+    int err_init = init_fun(notify_cb, appconf_noesc, strlen(appconf_noesc));
     free(appconf_noesc);
     if (0 != err_init) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
