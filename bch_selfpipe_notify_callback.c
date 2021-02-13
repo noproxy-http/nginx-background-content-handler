@@ -21,12 +21,11 @@
  * Created on February 13, 2021, 6:49 AM
  */
 
-#ifndef _WIN32
-
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
 
+#ifndef _WIN32
 #include "bch_selfpipe_notify_callback.h"
 
 #include <errno.h>

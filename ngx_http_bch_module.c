@@ -35,7 +35,6 @@
 
 int bch_selfpipe_fd_in = 0;
 int bch_selfpipe_fd_out = 0;
-#endif //!_WIN32
 
 static ngx_int_t initialize(ngx_cycle_t* cycle) {
 
@@ -46,6 +45,7 @@ static ngx_int_t initialize(ngx_cycle_t* cycle) {
  
     return NGX_OK;
 }
+#endif //!_WIN32
 
 static void* bch_create_loc_conf(ngx_conf_t* cf) {
     bch_loc_ctx* ctx = ngx_pcalloc(cf->pool, sizeof(bch_loc_ctx));
@@ -160,7 +160,11 @@ ngx_module_t ngx_http_background_content_handler_module = {
     NGX_HTTP_MODULE, /* module type */
     NULL, /* init master */
     NULL, /* init module */
+#ifndef _WIN32
     initialize, /* init process */
+#else //!_WIN32
+    NULL, /* init process */
+#endif //_WIN32
     NULL, /* init thread */
     NULL, /* exit thread */
     NULL, /* exit process */
