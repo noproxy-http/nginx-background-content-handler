@@ -47,12 +47,12 @@
 static bch_resp* get_resp(ngx_log_t* log, ngx_str_t args) {
     if (0 == args.len) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
-                "'bch_http_notify': no response specified on notify call");
+                "bch_http_notify: no response specified on notify call");
         return NULL;
     }
     if (args.len >= 32) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
-                "'bch_http_notify': invalid response handle, length: [%l]", args.len);
+                "bch_http_notify: invalid response handle, length: [%l]", args.len);
         return NULL;
     }
     char cstr[32];
@@ -63,7 +63,7 @@ static bch_resp* get_resp(ngx_log_t* log, ngx_str_t args) {
     long long handle = strtoll(cstr, &endptr, 0);
     if (errno == ERANGE || cstr + args.len != endptr) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
-                "'bch_http_notify': cannot parse handle from string, value: [%s]", cstr);
+                "bch_http_notify: cannot parse handle from string, value: [%s]", cstr);
         return NULL;
     }
     return (bch_resp*) handle;
@@ -88,7 +88,7 @@ ngx_int_t bch_http_notify_handler(ngx_http_request_t *r) {
     ngx_buf_t* buf = ngx_pcalloc(r->pool, sizeof(ngx_buf_t));
     if (NULL == buf) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': pool allocation error, size: [%l]", sizeof(ngx_buf_t));
+                "bch_http_notify: pool allocation error, size: [%l]", sizeof(ngx_buf_t));
         ngx_http_finalize_request(r, NGX_ERROR);
         return NGX_ERROR;
     }

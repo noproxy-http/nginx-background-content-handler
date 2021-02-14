@@ -81,7 +81,7 @@ static char* conf_background_content_handler_notify_port(ngx_conf_t *cf, ngx_com
     long port = strtol((char*) st->data, &endptr, 0);
     if (((char*)st->data) + st->len != endptr || port < 0 || port > 1<<16) {
         ngx_conf_log_error(NGX_LOG_ERR, cf, 0,
-                "'background_content_handler_notify_port': invalid port number specified,"
+                "background_content_handler_notify_port: invalid port number specified,"
                 " value: [%s]", st->data);
         return NGX_CONF_ERROR;
     }

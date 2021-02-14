@@ -24,6 +24,8 @@
 #include "bch_functions.h"
 
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -34,33 +36,50 @@ bch_send_response_type send_response = nullptr;
 
 } // namespace
 
+#ifdef _WIN32
+__declspec( dllexport )
+#endif // _WIN32
+extern "C" 
 int bch_initialize(bch_send_response_type response_callback,
         const char* hanler_config, int hanler_config_len) {
     
     send_response = response_callback;
     
     auto str = std::string(hanler_config, static_cast<size_t>(hanler_config_len));
-    std::cerr << "conf: " << str << std::endl;
+    std::cerr << "Test app init, conf: [" << str << "]" << std::endl;
 
     return 0;
 }
 
+#ifdef _WIN32
+__declspec( dllexport )
+#endif // _WIN32
+extern "C" 
 int bch_receive_request(void* request,
         const char* metadata, int metadata_len,
         const char* data, int data_len) {
-    
-    std::cerr << "request: " << reinterpret_cast<int64_t>(request) << std::endl;
+
     auto meta = std::string(metadata, static_cast<size_t>(metadata_len));
-    //std::cerr << "meta: " << meta << std::endl;
-    auto data_st = nullptr != data ? std::string(data, static_cast<size_t>(data_len)) : "";
-    std::cerr << "data_len: " << data_st.length() << std::endl;
+    auto data_st = nullptr != data ? std::string(data, static_cast<size_t>(data_len)) : std::string();
 
     std::thread([request, meta, data_st] () {
-        std::cerr << "notifying ..."  << std::endl;
-        int err = send_response(request, 200, "{}", 2, meta.c_str(), static_cast<int>(meta.length()));
-        std::cerr << "notified: " << err  << std::endl;
+        char* data_resp = nullptr;
+        if (data_st.length() > 0) {
+            data_resp = static_cast<char*>(std::malloc(data_st.length()));
+            std::memcpy(data_resp, data_st.data(), data_st.length());
+        }
+        send_response(request, 200, "{}", 2, data_resp, data_st.length());
     }).detach();
 
     return 0;
 }
 
+#ifdef _WIN32
+__declspec( dllexport )
+#endif // _WIN32
+extern "C"
+void bch_free_response_data(void* data) {
+    if (nullptr != data) {
+        std::free(reinterpret_cast<char*>(data));
+    }
+}

@@ -42,7 +42,7 @@ ngx_int_t bch_selfpipe_create(ngx_cycle_t* cycle, int* fd1_out, int* fd2_out) {
     int err = pipe(fds);
     if (0 != err) {
         ngx_log_error(NGX_LOG_ERR, cycle->log, 0,
-                "bch_selfpipe_notify: cannot create selfpipe, error: [%d]", errno);
+                "bch_selfpipe_create: cannot create selfpipe, error: [%d]", errno);
         return NGX_ERROR;
     }
 
@@ -50,13 +50,13 @@ ngx_int_t bch_selfpipe_create(ngx_cycle_t* cycle, int* fd1_out, int* fd2_out) {
     int err_fds1_nb = ngx_nonblocking(fds[0]);
     if (-1 == err_fds1_nb) {
         ngx_log_error(NGX_LOG_ERR, cycle->log, 0,
-                "bch_selfpipe_notify: selfpipe fd1 non-blocking failed, error: [%d]", err_fds1_nb);
+                "bch_selfpipe_create: selfpipe fd1 non-blocking failed, error: [%d]", err_fds1_nb);
         return NGX_ERROR;
     }
     int err_fds2_nb = ngx_nonblocking(fds[1]);
     if (-1 == err_fds2_nb) {
         ngx_log_error(NGX_LOG_ERR, cycle->log, 0,
-                "bch_selfpipe_notify: selfpipe fd2 non-blocking failed, error: [%d]", err_fds2_nb);
+                "bch_selfpipe_create: selfpipe fd2 non-blocking failed, error: [%d]", err_fds2_nb);
         return NGX_ERROR;
     }
 
@@ -64,7 +64,7 @@ ngx_int_t bch_selfpipe_create(ngx_cycle_t* cycle, int* fd1_out, int* fd2_out) {
     ngx_int_t rc = ngx_add_channel_event(cycle, fds[0], NGX_READ_EVENT, bch_selfpipe_notify_handler);
     if (NGX_OK != rc) {
         ngx_log_error(NGX_LOG_ERR, cycle->log, 0,
-                "bch_selfpipe_notify: selfpipe handler registration failed, error: [%d]", rc);
+                "bch_selfpipe_create: selfpipe handler registration failed, error: [%d]", rc);
         return NGX_ERROR;
     }
 

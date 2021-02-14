@@ -53,7 +53,7 @@ static ngx_int_t add_single_header(ngx_http_request_t* r, const char* key_in, co
     key.data = ngx_pcalloc(r->pool, key.len);
     if (NULL == key.data) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': pool allocation error, size: [%l]", key.len);
+                "bch_notify: pool allocation error, size: [%l]", key.len);
         return NGX_ERROR;
     }
     memcpy(key.data, key_in, key.len);
@@ -64,7 +64,7 @@ static ngx_int_t add_single_header(ngx_http_request_t* r, const char* key_in, co
     value.data = ngx_pcalloc(r->pool, value.len);
     if (NULL == value.data) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': pool allocation error, size: [%l]", value.len);
+                "bch_notify: pool allocation error, size: [%l]", value.len);
         return NGX_ERROR;
     }
     memcpy(value.data, value_in, value.len);
@@ -73,7 +73,7 @@ static ngx_int_t add_single_header(ngx_http_request_t* r, const char* key_in, co
     ngx_table_elt_t* hout = ngx_list_push(&r->headers_out.headers);
     if (hout == NULL) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': header allocation error");
+                "bch_notify: header allocation error");
         return NGX_ERROR;
     }
     hout->key = key;
@@ -143,7 +143,7 @@ static ngx_temp_file_t* create_temp_file(ngx_http_request_t* r, const char* data
     ngx_fd_t fd = open(data_file, O_RDONLY);
     if (-1 == fd) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': cannot open response file, path: [%s]", data_file);
+                "bch_notify: cannot open response file, path: [%s]", data_file);
         return NULL;
     }
     struct stat st;
@@ -151,7 +151,7 @@ static ngx_temp_file_t* create_temp_file(ngx_http_request_t* r, const char* data
     if (0 != err_stat) {
         close(fd);
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': cannot stat response file, path: [%s]", data_file);
+                "bch_notify: cannot stat response file, path: [%s]", data_file);
         return NULL;
     }
     size_t st_size = st.st_size;
@@ -160,7 +160,7 @@ static ngx_temp_file_t* create_temp_file(ngx_http_request_t* r, const char* data
     int err_widen = widen(data_file, &wname);
     if (0 != err_widen) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': file name widen error, code: [%d]", err_widen);
+                "bch_notify: file name widen error, code: [%d]", err_widen);
         return NULL;
     }
     HANDLE fd = CreateFileW(wname, GENERIC_READ, 
@@ -168,7 +168,7 @@ static ngx_temp_file_t* create_temp_file(ngx_http_request_t* r, const char* data
             NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (INVALID_HANDLE_VALUE == fd) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': cannot open response file, path: [%s]", data_file);
+                "bch_notify: cannot open response file, path: [%s]", data_file);
         return NULL;
     }
     LARGE_INTEGER wsize;
@@ -176,7 +176,7 @@ static ngx_temp_file_t* create_temp_file(ngx_http_request_t* r, const char* data
     if (0 == err_size) {
         close(fd);
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': cannot stat response file, path: [%s]", data_file);
+                "bch_notify: cannot stat response file, path: [%s]", data_file);
         return NULL;
     }
     size_t st_size = (size_t) wsize.QuadPart;
@@ -187,7 +187,7 @@ static ngx_temp_file_t* create_temp_file(ngx_http_request_t* r, const char* data
     if (tf == NULL) {
         close(fd);
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': error allocating buffer, size: [%l]", sizeof(ngx_temp_file_t));
+                "bch_notify: error allocating buffer, size: [%l]", sizeof(ngx_temp_file_t));
         return NULL;
     }
     tf->file.fd = fd;
@@ -200,7 +200,7 @@ static ngx_temp_file_t* create_temp_file(ngx_http_request_t* r, const char* data
     if (NULL == name_cleanup) {
         close(fd);
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': error allocating buffer, size: [%d]", strlen(data_file) + 1);
+                "bch_notify: error allocating buffer, size: [%d]", strlen(data_file) + 1);
         return NULL;
     }
     memcpy(name_cleanup, data_file, strlen(data_file));
@@ -208,7 +208,7 @@ static ngx_temp_file_t* create_temp_file(ngx_http_request_t* r, const char* data
     if (cln == NULL) {
         close(fd);
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': error creating reponse file cleanup struct]");
+                "bch_notify: error creating reponse file cleanup struct]");
         return NULL;
     }
     cln->handler = ngx_pool_delete_file;
@@ -229,7 +229,7 @@ static ngx_buf_t* create_client_buf(bch_resp* resp, const char* data_file, size_
     ngx_buf_t* buf = ngx_pcalloc(r->pool, sizeof(ngx_buf_t));
     if (NULL == buf) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': pool allocation error, size: [%l]", sizeof(ngx_buf_t));
+                "bch_notify: pool allocation error, size: [%l]", sizeof(ngx_buf_t));
         return NULL;
     }
 
@@ -238,7 +238,7 @@ static ngx_buf_t* create_client_buf(bch_resp* resp, const char* data_file, size_
             ngx_pool_cleanup_t* cln = ngx_pool_cleanup_add(r->pool, sizeof(char*));
             if (cln == NULL) {
                 ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                        "'bch_http_notify': error creating response data cleanup struct");
+                        "bch_notify: error creating response data cleanup struct");
                 return NULL;
             }
             cln->handler = resp->request->ctx->free_response_data_fun;
@@ -274,7 +274,7 @@ ngx_int_t bch_send_buffer(ngx_http_request_t* r, ngx_buf_t* buf) {
     ngx_int_t err_headers = ngx_http_send_header(r);
     if (NGX_OK != err_headers) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': error sending headers, code: [%d]", err_headers);
+                "bch_notify: error sending headers, code: [%d]", err_headers);
         return err_headers;
     }
 
@@ -285,7 +285,7 @@ ngx_int_t bch_send_buffer(ngx_http_request_t* r, ngx_buf_t* buf) {
     ngx_int_t err_filters = ngx_http_output_filter(r, &chain);
     if (NGX_OK != err_filters && NGX_AGAIN != err_filters) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': error sending data, code: [%d]", err_filters);
+                "bch_notify: error sending data, code: [%d]", err_filters);
         return err_filters;
     }
 
@@ -297,7 +297,7 @@ ngx_int_t bch_send_resp_to_client(bch_resp* resp) {
 
     if (r->connection->error) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_http_notify': request already finalized, counter: [%d]", r->count);
+                "bch_notify: request already finalized, counter: [%d]", r->count);
         ngx_http_finalize_request(r, NGX_ERROR);
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
@@ -335,7 +335,7 @@ ngx_int_t bch_send_resp_to_client(bch_resp* resp) {
         ngx_http_run_posted_requests(c);
     } else {
         ngx_log_error(NGX_LOG_ERR, c->log, 0,
-                "'bch_http_notify': client connection error on sending response");
+                "bch_notify: client connection error on sending response");
     }
     return rc == NGX_HTTP_OK ? NGX_HTTP_OK : NGX_HTTP_BAD_GATEWAY;
 }

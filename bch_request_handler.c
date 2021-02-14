@@ -136,14 +136,14 @@ ngx_int_t init(ngx_log_t* log, bch_loc_ctx* ctx) {
     // load handler shared lib
     if (0 == ctx->libname.len) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
-                "'bch_request_handler_init': handler shared library not specified");
+                "bch_request_handler: handler shared library not specified");
         return NGX_ERROR;
     }
 
     char* libname_noesc = unescape_spaces(ctx->libname);
     if (NULL == libname_noesc) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
-                "'bch_request_handler_init': alloc failed, size [%d]", ctx->libname.len);
+                "bch_request_handler: alloc failed, size [%d]", ctx->libname.len);
         return NGX_ERROR;
     }
 
@@ -173,7 +173,7 @@ ngx_int_t init(ngx_log_t* log, bch_loc_ctx* ctx) {
     char* appconf_noesc = unescape_spaces(ctx->appconf);
     if (NULL == appconf_noesc) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
-                "'bch_request_handler_init': alloc failed, size [%d]", ctx->appconf.len);
+                "bch_request_handler: alloc failed, size [%d]", ctx->appconf.len);
         return NGX_ERROR;
     }
 
@@ -189,7 +189,7 @@ ngx_int_t init(ngx_log_t* log, bch_loc_ctx* ctx) {
     free(appconf_noesc);
     if (0 != err_init) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
-                "'bch_request_handler_init': application init error, code [%d]", err_init);
+                "bch_request_handler: application init error, code [%d]", err_init);
         return NGX_ERROR;
     }
 
@@ -199,7 +199,7 @@ ngx_int_t init(ngx_log_t* log, bch_loc_ctx* ctx) {
 static void body_handler(ngx_http_request_t* r) {
     if (NULL == r->request_body) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_request_handler': cannot access request body");
+                "bch_request_handler: cannot access request body");
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;
     }
@@ -207,7 +207,7 @@ static void body_handler(ngx_http_request_t* r) {
     bch_loc_ctx* ctx = ngx_http_get_module_loc_conf(r, ngx_http_background_content_handler_module);
     if (NULL == ctx) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_request_handler': cannot access location context");
+                "bch_request_handler: cannot access location context");
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;
     }
@@ -240,7 +240,7 @@ static void body_handler(ngx_http_request_t* r) {
     bch_req* request = ngx_pcalloc(r->pool, sizeof(bch_req));
     if (NULL == request) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_request_handler': error allocating buffer, size: [%l]", sizeof(bch_req));
+                "bch_request_handler: error allocating buffer, size: [%l]", sizeof(bch_req));
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;
     }
@@ -252,7 +252,7 @@ static void body_handler(ngx_http_request_t* r) {
     free(dumped);
     if (0 != err_handler) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                "'bch_request_handler': 'bch_receive_request' call returned error, code: [%d]", err_handler);
+                "bch_request_handler: 'bch_receive_request' call returned error, code: [%d]", err_handler);
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;
     }
