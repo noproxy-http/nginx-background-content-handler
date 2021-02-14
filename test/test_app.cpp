@@ -36,10 +36,10 @@ bch_send_response_type send_response = nullptr;
 
 } // namespace
 
+extern "C" 
 #ifdef _WIN32
 __declspec( dllexport )
 #endif // _WIN32
-extern "C" 
 int bch_initialize(bch_send_response_type response_callback,
         const char* hanler_config, int hanler_config_len) {
     
@@ -51,10 +51,10 @@ int bch_initialize(bch_send_response_type response_callback,
     return 0;
 }
 
+extern "C"
 #ifdef _WIN32
 __declspec( dllexport )
 #endif // _WIN32
-extern "C" 
 int bch_receive_request(void* request,
         const char* metadata, int metadata_len,
         const char* data, int data_len) {
@@ -68,16 +68,16 @@ int bch_receive_request(void* request,
             data_resp = static_cast<char*>(std::malloc(data_st.length()));
             std::memcpy(data_resp, data_st.data(), data_st.length());
         }
-        send_response(request, 200, "{}", 2, data_resp, data_st.length());
+        send_response(request, 200, "{}", 2, data_resp, static_cast<int>(data_st.length()));
     }).detach();
 
     return 0;
 }
 
+extern "C"
 #ifdef _WIN32
 __declspec( dllexport )
 #endif // _WIN32
-extern "C"
 void bch_free_response_data(void* data) {
     if (nullptr != data) {
         std::free(reinterpret_cast<char*>(data));
