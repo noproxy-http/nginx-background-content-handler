@@ -34,18 +34,6 @@
 #include "jansson.h"
 
 #include "bch_data.h"
-#include "bch_dlopen.h"
-#include "bch_functions.h"
-#include "bch_http_notify_callback.h"
-
-#ifndef _WIN32
-#include "bch_selfpipe_notify_callback.h"
-#endif //!_WIN32
-
-typedef int (*bch_initialize_type)(
-        bch_send_response_type response_callback,
-        const char* hanler_config,
-        int hanler_config_len);
 
 static json_t* read_headers(ngx_http_headers_in_t* headers_in) {
     ngx_list_part_t* part = &headers_in->headers.part;
@@ -115,87 +103,6 @@ static json_t* create_meta(ngx_http_request_t* r) {
     return res;
 }
 
-static char* unescape_spaces(ngx_str_t str) {
-    char* res = malloc(str.len + 1);
-    if (NULL == res) {
-        return NULL;
-    }
-    memset(res, '\0', str.len + 1);
-    size_t j = 0;
-    for (size_t i = 0; i < str.len; i++) {
-        char ch = str.data[i];
-        if (!('\\' == ch && i < str.len - 1 && ' ' == str.data[i + 1])) {
-            res[j] = ch;
-            j++;
-        }
-    }
-    return res;
-}
-
-ngx_int_t init(ngx_log_t* log, bch_loc_ctx* ctx) {
-    // load handler shared lib
-    if (0 == ctx->libname.len) {
-        ngx_log_error(NGX_LOG_ERR, log, 0,
-                "bch_request_handler: handler shared library not specified");
-        return NGX_ERROR;
-    }
-
-    char* libname_noesc = unescape_spaces(ctx->libname);
-    if (NULL == libname_noesc) {
-        ngx_log_error(NGX_LOG_ERR, log, 0,
-                "bch_request_handler: alloc failed, size [%d]", ctx->libname.len);
-        return NGX_ERROR;
-    }
-
-    // load lib, conf values are NUL-terminated
-    void* lib = bch_dyload_library(log, libname_noesc);
-    free(libname_noesc);
-    if (NULL == lib) {
-        return NGX_ERROR;
-    }
-
-    // lookup init
-    bch_initialize_type init_fun = (bch_initialize_type) bch_dyload_symbol(log, lib, "bch_initialize");
-    if (NULL == init_fun) {
-        return NGX_ERROR;
-    }
-
-    // lookup receive and free
-    ctx->receive_request_fun = (bch_receive_request_type) bch_dyload_symbol(log, lib, "bch_receive_request");
-    if (NULL == ctx->receive_request_fun) {
-        return NGX_ERROR;
-    }
-    ctx->free_response_data_fun = (bch_free_response_data_type) bch_dyload_symbol(log, lib, "bch_free_response_data");
-    if (NULL == ctx->free_response_data_fun) {
-        return NGX_ERROR;
-    }
-
-    char* appconf_noesc = unescape_spaces(ctx->appconf);
-    if (NULL == appconf_noesc) {
-        ngx_log_error(NGX_LOG_ERR, log, 0,
-                "bch_request_handler: alloc failed, size [%d]", ctx->appconf.len);
-        return NGX_ERROR;
-    }
-
-    bch_send_response_type notify_cb = bch_http_notify_callback;
-#ifndef _WIN32
-    if (0 == ctx->notify_port) {
-        notify_cb = bch_selfpipe_notify_callback;
-    }
-#endif //!_WIN32
-
-    // call init
-    int err_init = init_fun(notify_cb, appconf_noesc, strlen(appconf_noesc));
-    free(appconf_noesc);
-    if (0 != err_init) {
-        ngx_log_error(NGX_LOG_ERR, log, 0,
-                "bch_request_handler: application init error, code [%d]", err_init);
-        return NGX_ERROR;
-    }
-
-    return NGX_OK;
-}
-
 static void body_handler(ngx_http_request_t* r) {
     if (NULL == r->request_body) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
@@ -213,11 +120,10 @@ static void body_handler(ngx_http_request_t* r) {
     }
 
     if (NULL == ctx->receive_request_fun) {
-        ngx_int_t err_init = init(r->connection->log, ctx);
-        if (NGX_OK != err_init)  {
-            ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
-            return;
-        }
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                "bch_request_handler: location handler not initialized");
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
     }
 
     // prepare meta

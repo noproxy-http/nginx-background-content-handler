@@ -28,6 +28,7 @@
 #include "bch_data.h"
 #include "bch_http_notify_callback.h"
 #include "bch_http_notify_handler.h"
+#include "bch_location_lifecycle.h"
 #include "bch_request_handler.h"
 
 #ifndef _WIN32
@@ -35,17 +36,64 @@
 
 int bch_selfpipe_fd_in = 0;
 int bch_selfpipe_fd_out = 0;
+#endif //!_WIN32
 
-static ngx_int_t initialize(ngx_cycle_t* cycle) {
+static ngx_int_t on_process_init(ngx_cycle_t* cycle) {
 
+#ifndef _WIN32
     ngx_int_t err_create = bch_selfpipe_create(cycle, &bch_selfpipe_fd_in, &bch_selfpipe_fd_out);
     if (NGX_OK != err_create) {
         return NGX_ERROR;
     }
- 
+#endif //!_WIN32
+
+    bch_main_ctx* mctx = ((ngx_http_conf_ctx_t *) cycle->conf_ctx[ngx_http_module.index])->
+            main_conf[ngx_http_background_content_handler_module.ctx_index];
+
+    for (size_t i = 0; i < mctx->locations_count; i++) {
+        bch_loc_ctx* ctx = mctx->locations[i];
+        ngx_int_t err_init = bch_location_init(cycle->log, ctx);
+        if (NGX_OK != err_init) {
+            for (size_t j = 0; j < i; j++) {
+                bch_loc_ctx* sctx = mctx->locations[j];
+                bch_location_shutdown(cycle->log, sctx);
+            }
+            return NGX_ERROR;
+        }
+    }
+
     return NGX_OK;
 }
-#endif //!_WIN32
+
+static void on_process_shutdown(ngx_cycle_t* cycle) {
+
+    bch_main_ctx* mctx = ((ngx_http_conf_ctx_t *) cycle->conf_ctx[ngx_http_module.index])->
+            main_conf[ngx_http_background_content_handler_module.ctx_index];
+
+    for (size_t i = 0; i < mctx->locations_count; i++) {
+        bch_loc_ctx* ctx = mctx->locations[i];
+        if (NULL != ctx->receive_request_fun) {
+            bch_location_shutdown(cycle->log, ctx);
+        }
+    }
+}
+
+static void* bch_create_main_conf(ngx_conf_t* cf) {
+    bch_main_ctx* mctx = ngx_pcalloc(cf->pool, sizeof(bch_main_ctx));
+    if (NULL == mctx) {
+        return NGX_CONF_ERROR;
+    }
+    return mctx;
+}
+
+static char* bch_init_main_conf(ngx_conf_t* cf, void *conf) {
+    bch_main_ctx* mctx = conf;
+
+    mctx->locations = NULL;
+    mctx->locations_count = 0;
+
+    return NGX_CONF_OK;
+}
 
 static void* bch_create_loc_conf(ngx_conf_t* cf) {
     bch_loc_ctx* ctx = ngx_pcalloc(cf->pool, sizeof(bch_loc_ctx));
@@ -100,8 +148,31 @@ static char* conf_background_content_handler_notify(ngx_conf_t *cf, ngx_command_
 static char* bch_merge_loc_conf(ngx_conf_t* cf, void* parent, void* conf) {
     bch_loc_ctx* ctx = conf;
 
-    (void) ctx;
-    // todo: validation
+    // add location context to main context
+    if (ctx->libname.len > 0) {
+        bch_main_ctx* mctx = ((ngx_http_conf_ctx_t *) cf->ctx)->
+                main_conf[ngx_http_background_content_handler_module.ctx_index];
+        int exists = 0;
+        for (size_t i = 0; i < mctx->locations_count; i++) {
+            if (mctx->locations[i] == ctx) {
+                exists = 1;
+                break;
+            }
+        }
+        if (!exists) {
+            size_t count = mctx->locations_count + 1;
+            bch_loc_ctx** locs = ngx_pcalloc(cf->pool, sizeof(bch_loc_ctx*) * count);
+            for (size_t i = 0; i < mctx->locations_count; i++) {
+                locs[i] = mctx->locations[i];
+            }
+            locs[count - 1] = ctx;
+            if (mctx->locations_count > 0) {
+                ngx_pfree(cf->pool, mctx->locations);
+            }
+            mctx->locations = locs;
+            mctx->locations_count = count;
+        }
+    }
 
     return NGX_CONF_OK;
 }
@@ -143,8 +214,8 @@ static ngx_http_module_t module_ctx = {
     NULL, /* preconfiguration */
     NULL, /* postconfiguration */
 
-    NULL, /* create main configuration */
-    NULL, /* init main configuration */
+    bch_create_main_conf, /* create main configuration */
+    bch_init_main_conf, /* init main configuration */
 
     NULL, /* create server configuration */
     NULL, /* merge server configuration */
@@ -160,14 +231,10 @@ ngx_module_t ngx_http_background_content_handler_module = {
     NGX_HTTP_MODULE, /* module type */
     NULL, /* init master */
     NULL, /* init module */
-#ifndef _WIN32
-    initialize, /* init process */
-#else //!_WIN32
-    NULL, /* init process */
-#endif //_WIN32
+    on_process_init, /* init process */
     NULL, /* init thread */
     NULL, /* exit thread */
-    NULL, /* exit process */
+    on_process_shutdown, /* exit process */
     NULL, /* exit master */
     NGX_MODULE_V1_PADDING
 };

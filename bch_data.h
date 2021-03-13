@@ -71,5 +71,10 @@ typedef struct bch_resp {
     size_t data_len;
 } bch_resp;
 
+typedef struct bch_main_ctx {
+    bch_loc_ctx** locations;
+    size_t locations_count;
+} bch_main_ctx;
+
 #endif /* BCH_DATA_H */
 
