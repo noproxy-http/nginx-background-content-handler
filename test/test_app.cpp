@@ -42,9 +42,9 @@ __declspec( dllexport )
 #endif // _WIN32
 int bch_initialize(bch_send_response_type response_callback,
         const char* hanler_config, int hanler_config_len) {
-    
+
     send_response = response_callback;
-    
+
     auto str = std::string(hanler_config, static_cast<size_t>(hanler_config_len));
     std::cerr << "Test app init, conf: [" << str << "]" << std::endl;
 
@@ -82,4 +82,12 @@ void bch_free_response_data(void* data) {
     if (nullptr != data) {
         std::free(reinterpret_cast<char*>(data));
     }
+}
+
+extern "C"
+#ifdef _WIN32
+__declspec( dllexport )
+#endif // _WIN32
+void bch_shutdown() {
+    std::cerr << "Test app shutdown" << std::endl;
 }

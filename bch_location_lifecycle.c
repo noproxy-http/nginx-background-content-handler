@@ -86,13 +86,17 @@ ngx_int_t bch_location_init(ngx_log_t* log, bch_loc_ctx* ctx) {
         return NGX_ERROR;
     }
 
-    // lookup receive and free
+    // lookup receive, free and shutdown
     ctx->receive_request_fun = (bch_receive_request_type) bch_dyload_symbol(log, lib, "bch_receive_request");
     if (NULL == ctx->receive_request_fun) {
         return NGX_ERROR;
     }
     ctx->free_response_data_fun = (bch_free_response_data_type) bch_dyload_symbol(log, lib, "bch_free_response_data");
     if (NULL == ctx->free_response_data_fun) {
+        return NGX_ERROR;
+    }
+    ctx->shutdown_fun = (bch_shutdown_type) bch_dyload_symbol(log, lib, "bch_shutdown");
+    if (NULL == ctx->shutdown_fun) {
         return NGX_ERROR;
     }
 
@@ -123,7 +127,10 @@ ngx_int_t bch_location_init(ngx_log_t* log, bch_loc_ctx* ctx) {
 }
 
 void bch_location_shutdown(ngx_log_t* log, bch_loc_ctx* ctx) {
-    // todo
-    ngx_log_error(NGX_LOG_ERR, log, 0,
-            "bch_location_lifecycle: shutdown called, libname [%s]", ctx->libname.data);
+    if (NULL != ctx->shutdown_fun) {
+        ctx->shutdown_fun();
+    } else {
+        ngx_log_error(NGX_LOG_ERR, log, 0, "bch_location_lifecycle"
+                " shutdown callback not available, libname [%s]", ctx->libname.data);
+    }
 }

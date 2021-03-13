@@ -56,6 +56,11 @@ __declspec( dllexport )
 void bch_free_response_data(
         void* data);
 
+#ifdef _WIN32
+__declspec( dllexport )
+#endif // _WIN32
+void bch_shutdown();
+
 #ifdef __cplusplus
 }
 #endif
