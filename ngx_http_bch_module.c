@@ -172,10 +172,13 @@ static char* bch_merge_loc_conf(ngx_conf_t* cf, void* parent, void* conf) {
             if (NULL == lib) {
                 return NGX_CONF_ERROR;
             }
+#ifndef _WIN32
+            // FreeLibrary at this point causes Access Violation
             int err_closed = bch_dyload_close(cf->log, lib);
             if (0 != err_closed) {
                 return NGX_CONF_ERROR;
             }
+#endif //!_WIN32
 
             // add location
             size_t count = mctx->locations_count + 1;

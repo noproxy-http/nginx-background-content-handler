@@ -165,7 +165,7 @@ int bch_dyload_close(ngx_log_t* log, void* lib) {
                 log, 0, "bch_dyload_close: invalid 'null' lib specified");
         return -1;
     }
-    BOOL err = FreeLibrary(lib);
+    BOOL err = FreeLibrary((HMODULE) lib);
     if (0 == err) {
         ngx_log_error(NGX_LOG_ERR,
                 log, 0, "bch_dyload_close: close, code: [%d]", GetLastError());
