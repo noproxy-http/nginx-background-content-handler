@@ -41,9 +41,11 @@ typedef int (*bch_initialize_type)(
         const char* hanler_config,
         int hanler_config_len);
 
-static char* unescape_spaces(ngx_str_t str) {
+char* bch_unescape_spaces(ngx_log_t* log, ngx_str_t str) {
     char* res = malloc(str.len + 1);
     if (NULL == res) {
+        ngx_log_error(NGX_LOG_ERR, log, 0,
+                "bch_unescape_spaces: alloc failed, size [%d]", str.len);
         return NULL;
     }
     memset(res, '\0', str.len + 1);
@@ -62,14 +64,12 @@ ngx_int_t bch_location_init(ngx_log_t* log, bch_loc_ctx* ctx) {
     // load handler shared lib
     if (0 == ctx->libname.len) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
-                "bch_location_lifecycle: handler shared library not specified");
+                "bch_location_init: handler shared library not specified");
         return NGX_ERROR;
     }
 
-    char* libname_noesc = unescape_spaces(ctx->libname);
+    char* libname_noesc = bch_unescape_spaces(log, ctx->libname);
     if (NULL == libname_noesc) {
-        ngx_log_error(NGX_LOG_ERR, log, 0,
-                "bch_location_lifecycle: alloc failed, size [%d]", ctx->libname.len);
         return NGX_ERROR;
     }
 
@@ -100,10 +100,8 @@ ngx_int_t bch_location_init(ngx_log_t* log, bch_loc_ctx* ctx) {
         return NGX_ERROR;
     }
 
-    char* appconf_noesc = unescape_spaces(ctx->appconf);
+    char* appconf_noesc = bch_unescape_spaces(log, ctx->appconf);
     if (NULL == appconf_noesc) {
-        ngx_log_error(NGX_LOG_ERR, log, 0,
-                "bch_location_lifecycle: alloc failed, size [%d]", ctx->appconf.len);
         return NGX_ERROR;
     }
 
@@ -119,7 +117,7 @@ ngx_int_t bch_location_init(ngx_log_t* log, bch_loc_ctx* ctx) {
     free(appconf_noesc);
     if (0 != err_init) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
-                "bch_location_lifecycle application init error, code [%d]", err_init);
+                "bch_location_init: application init error, code [%d]", err_init);
         return NGX_ERROR;
     }
 
@@ -130,7 +128,7 @@ void bch_location_shutdown(ngx_log_t* log, bch_loc_ctx* ctx) {
     if (NULL != ctx->shutdown_fun) {
         ctx->shutdown_fun();
     } else {
-        ngx_log_error(NGX_LOG_ERR, log, 0, "bch_location_lifecycle"
+        ngx_log_error(NGX_LOG_ERR, log, 0, "bch_location_shutdown:"
                 " shutdown callback not available, libname [%s]", ctx->libname.data);
     }
 }

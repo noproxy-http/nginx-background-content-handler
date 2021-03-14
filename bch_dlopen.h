@@ -32,5 +32,7 @@ void* bch_dyload_library(ngx_log_t* log, const char* libname);
 
 void* bch_dyload_symbol(ngx_log_t* log, void* lib, const char* symbol);
 
+int bch_dyload_close(ngx_log_t* log, void* lib);
+
 #endif /* BCH_DLOPEN_H */
 

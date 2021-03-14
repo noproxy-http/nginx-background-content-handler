@@ -26,6 +26,7 @@
 #include <ngx_http.h>
 
 #include "bch_data.h"
+#include "bch_dlopen.h"
 #include "bch_http_notify_callback.h"
 #include "bch_http_notify_handler.h"
 #include "bch_location_lifecycle.h"
@@ -160,6 +161,23 @@ static char* bch_merge_loc_conf(ngx_conf_t* cf, void* parent, void* conf) {
             }
         }
         if (!exists) {
+
+            // check lib can be loaded, symbols checks are omitted for now
+            char* libname_noesc = bch_unescape_spaces(cf->log, ctx->libname);
+            if (NULL == libname_noesc) {
+                return NGX_CONF_ERROR;
+            }
+            void* lib = bch_dyload_library(cf->log, libname_noesc);
+            free(libname_noesc);
+            if (NULL == lib) {
+                return NGX_CONF_ERROR;
+            }
+            int err_closed = bch_dyload_close(cf->log, lib);
+            if (0 != err_closed) {
+                return NGX_CONF_ERROR;
+            }
+
+            // add location
             size_t count = mctx->locations_count + 1;
             bch_loc_ctx** locs = ngx_pcalloc(cf->pool, sizeof(bch_loc_ctx*) * count);
             for (size_t i = 0; i < mctx->locations_count; i++) {
@@ -171,6 +189,7 @@ static char* bch_merge_loc_conf(ngx_conf_t* cf, void* parent, void* conf) {
             }
             mctx->locations = locs;
             mctx->locations_count = count;
+
         }
     }
 

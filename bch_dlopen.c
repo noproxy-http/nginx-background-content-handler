@@ -69,6 +69,21 @@ void* bch_dyload_symbol(ngx_log_t* log, void* lib, const char* symbol) {
     return sym;
 }
 
+int bch_dyload_close(ngx_log_t* log, void* lib) {
+    if (NULL == lib) {
+        ngx_log_error(NGX_LOG_ERR,
+                log, 0, "bch_dyload_close: invalid 'null' lib specified");
+        return -1;
+    }
+    int err = dlclose(lib);
+    if (0 != err) {
+        ngx_log_error(NGX_LOG_ERR,
+                log, 0, "bch_dyload_close: close, code: [%d]", err);
+        return 1;
+    }
+    return 0;
+}
+
 
 #else // _WIN32
 
@@ -125,7 +140,6 @@ void* bch_dyload_library(ngx_log_t* log, const char* libname) {
 }
 
 void* bch_dyload_symbol(ngx_log_t* log, void* lib, const char* symbol) {
-    (void) widen;
     if (NULL == lib) {
         ngx_log_error(NGX_LOG_ERR,
                 log, 0, "bch_dyload_symbol: invalid 'null' lib specified");
@@ -143,6 +157,22 @@ void* bch_dyload_symbol(ngx_log_t* log, void* lib, const char* symbol) {
                         symbol, GetLastError());
     }
     return (void*) sym;
+}
+
+int bch_dyload_close(ngx_log_t* log, void* lib) {
+    if (NULL == lib) {
+        ngx_log_error(NGX_LOG_ERR,
+                log, 0, "bch_dyload_close: invalid 'null' lib specified");
+        return -1;
+    }
+    BOOL err = FreeLibrary(lib);
+    if (0 == err) {
+        ngx_log_error(NGX_LOG_ERR,
+                log, 0, "bch_dyload_close: close, code: [%d]", GetLastError());
+        return 1;
+    }
+    return 0;
+
 }
 
 #endif // _WIN32

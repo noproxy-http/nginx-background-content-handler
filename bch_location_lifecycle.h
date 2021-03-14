@@ -30,6 +30,8 @@
 
 #include "bch_data.h"
 
+char* bch_unescape_spaces(ngx_log_t* log, ngx_str_t str);
+
 ngx_int_t bch_location_init(ngx_log_t* log, bch_loc_ctx* ctx);
 
 void bch_location_shutdown(ngx_log_t* log, bch_loc_ctx* ctx);
