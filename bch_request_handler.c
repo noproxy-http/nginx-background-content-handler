@@ -103,6 +103,36 @@ static json_t* create_meta(ngx_http_request_t* r) {
     return res;
 }
 
+static char* flatten_chain(ngx_http_request_t* r, ngx_chain_t* chain, int* len_out) {
+    size_t flat_len = 0;
+    for (ngx_chain_t* ch = chain; NULL != ch && NULL != ch->buf; ch = ch->next) {
+        flat_len += ch->buf->last - ch->buf->pos;
+        if (ch->buf->last_buf) {
+            break;
+        }
+    }
+
+    char* flat = ngx_pcalloc(r->pool, flat_len);
+    if (NULL == flat) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                "bch_request_handler: error allocating flat buffer, size: [%l]", flat_len);
+        return NULL;
+    }
+
+    size_t flat_pos = 0;
+    for (ngx_chain_t* ch = chain; NULL != ch && NULL != ch->buf; ch = ch->next) {
+        size_t len = ch->buf->last - ch->buf->pos;
+        memcpy(flat + flat_pos, ch->buf->pos, len);
+        flat_pos += len;
+        if (ch->buf->last_buf) {
+            break;
+        }
+    }
+
+    *len_out = flat_len;
+    return flat;
+}
+
 static void body_handler(ngx_http_request_t* r) {
     if (NULL == r->request_body) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
@@ -135,10 +165,14 @@ static void body_handler(ngx_http_request_t* r) {
     char* data = NULL;
     int data_len = 0;
     if (NULL == r->request_body->temp_file) {
-        ngx_chain_t* in = r->request_body->bufs;
-        if (NULL != in && NULL != in->buf) {
-            data = (char*) in->buf->pos;
-            data_len = in->buf->last - in->buf->pos;
+        ngx_chain_t* chain = r->request_body->bufs;
+        if (NULL != chain && NULL != chain->buf) {
+            if (chain->buf->last_buf) {
+                data = (char*) chain->buf->pos;
+                data_len = chain->buf->last - chain->buf->pos;
+            } else {
+                data = flatten_chain(r, chain, &data_len);
+            }
         }
     }
 
@@ -166,7 +200,8 @@ static void body_handler(ngx_http_request_t* r) {
 
 ngx_int_t bch_request_handler(ngx_http_request_t* r) {
     // http://mailman.nginx.org/pipermail/nginx/2007-August/001559.html
-    r->request_body_in_single_buf = 1;
+    // does not actually work, flatten_chain is used instead
+    // r->request_body_in_single_buf = 1;
     r->request_body_in_persistent_file = 1;
     r->request_body_in_clean_file = 1;
     r->request_body_file_log_level = 0;
