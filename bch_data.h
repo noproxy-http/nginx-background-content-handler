@@ -51,6 +51,7 @@ typedef void (*bch_shutdown_type)();
 
 typedef struct bch_loc_ctx {
     ngx_str_t libname;
+    ngx_array_t* deplibs;
     ngx_str_t appconf;
 
     bch_receive_request_type receive_request_fun;

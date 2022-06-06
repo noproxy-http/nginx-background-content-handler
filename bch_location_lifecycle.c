@@ -41,6 +41,66 @@ typedef int (*bch_initialize_type)(
         const char* hanler_config,
         int hanler_config_len);
 
+static ngx_int_t dyload_deps(ngx_log_t* log, bch_loc_ctx* ctx, void*** deplibs_out) {
+    void** libs = malloc(sizeof(void*) * ctx->deplibs->nelts);
+    if (NULL == libs) {
+        return NGX_ERROR;
+    }
+    
+    ngx_str_t* elts = ctx->deplibs->elts;
+    for (size_t i = 0; i < ctx->deplibs->nelts; i++) {
+        char* libname_noesc = bch_unescape_spaces(log, elts[i]);
+        if (NULL == libname_noesc) {
+            free(libs);
+            return NGX_ERROR;
+        }
+
+        // load lib, conf values are NUL-terminated
+        void* lib = bch_dyload_library(log, libname_noesc);
+        free(libname_noesc);
+        if (NULL == lib) {
+            free(libs);
+            return NGX_ERROR;
+        }
+        libs[i] = lib;
+    }
+
+    if (NULL != deplibs_out) {
+        *deplibs_out = libs;
+    } else {
+        free(libs);
+    }
+    return NGX_OK;
+}
+
+static ngx_int_t close_deps(ngx_log_t* log, bch_loc_ctx* ctx, void** deplibs) {
+    for (size_t i = 0; i < ctx->deplibs->nelts; i++) {
+        int err_close = bch_dyload_close(log, deplibs[i]);
+        if (0 != err_close) {
+            return NGX_ERROR;
+        }
+    }
+    return NGX_OK;
+}
+
+static void* dyload_handler_lib(ngx_log_t* log, bch_loc_ctx* ctx) {
+    if (0 == ctx->libname.len) {
+        ngx_log_error(NGX_LOG_ERR, log, 0,
+                "bch_location_check_dyload: handler shared library not specified");
+        return NULL;
+    }
+
+    char* libname_noesc = bch_unescape_spaces(log, ctx->libname);
+    if (NULL == libname_noesc) {
+        return NULL;
+    }
+
+    // load lib, conf values are NUL-terminated
+    void* lib = bch_dyload_library(log, libname_noesc);
+    free(libname_noesc);
+    return lib;
+}
+
 char* bch_unescape_spaces(ngx_log_t* log, ngx_str_t str) {
     char* res = malloc(str.len + 1);
     if (NULL == res) {
@@ -60,22 +120,50 @@ char* bch_unescape_spaces(ngx_log_t* log, ngx_str_t str) {
     return res;
 }
 
+ngx_int_t bch_location_check_dyload(ngx_log_t* log, bch_loc_ctx* ctx) {
+    // load handler lib dependencies, if any
+    void** deplibs = NULL;
+    ngx_int_t err_deps = dyload_deps(log, ctx, &deplibs);
+    if (NGX_OK != err_deps) {
+        return err_deps;
+    }
+
+    // check lib can be loaded, symbols checks are omitted
+    void* lib = dyload_handler_lib(log, ctx);
+    if (NULL == lib) {
+        free(deplibs);
+        return NGX_ERROR;
+    }
+
+#ifndef _WIN32
+    // FreeLibrary at this point causes Access Violation
+    int err_closed = bch_dyload_close(log, lib);
+    if (0 != err_closed) {
+        free(deplibs);
+        return NGX_ERROR;
+    }
+    int err_deps_closed = close_deps(log, ctx, deplibs);
+    free(deplibs);
+    if (0!= err_deps_closed) {
+        return NGX_ERROR;
+    }
+#else //!_WIN32
+    (void) close_deps;
+    free(deplibs);
+#endif //!_WIN32
+
+    return NGX_OK;
+}
+
 ngx_int_t bch_location_init(ngx_log_t* log, bch_loc_ctx* ctx) {
+    // load handler lib dependencies, if any
+    ngx_int_t err_deps = dyload_deps(log, ctx, NULL);
+    if (NGX_OK != err_deps) {
+        return NGX_ERROR;
+    }
+
     // load handler shared lib
-    if (0 == ctx->libname.len) {
-        ngx_log_error(NGX_LOG_ERR, log, 0,
-                "bch_location_init: handler shared library not specified");
-        return NGX_ERROR;
-    }
-
-    char* libname_noesc = bch_unescape_spaces(log, ctx->libname);
-    if (NULL == libname_noesc) {
-        return NGX_ERROR;
-    }
-
-    // load lib, conf values are NUL-terminated
-    void* lib = bch_dyload_library(log, libname_noesc);
-    free(libname_noesc);
+    void* lib = dyload_handler_lib(log, ctx);
     if (NULL == lib) {
         return NGX_ERROR;
     }

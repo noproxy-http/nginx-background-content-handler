@@ -101,6 +101,11 @@ static void* bch_create_loc_conf(ngx_conf_t* cf) {
     if (NULL == ctx) {
         return NGX_CONF_ERROR;
     }
+    ctx->deplibs = ngx_array_create(cf->pool, 0, sizeof(ngx_str_t));
+    if (NULL == ctx->deplibs) {
+        return NGX_CONF_ERROR;
+    }
+
     return ctx;
 }
 
@@ -111,6 +116,24 @@ static char* conf_background_content_handler(ngx_conf_t *cf, ngx_command_t* cmd,
     bch_loc_ctx* ctx = conf;
     ngx_str_t* elts = cf->args->elts;
     ctx->libname = elts[1];
+    return NGX_CONF_OK;
+}
+
+static char* conf_background_content_handler_deplibs(ngx_conf_t *cf, ngx_command_t* cmd, void *conf) {
+    bch_loc_ctx* ctx = conf;
+    ngx_array_destroy(ctx->deplibs);
+    ctx->deplibs = ngx_array_create(cf->pool, cf->args->nelts - 1, sizeof(ngx_str_t));
+    if (NULL == ctx->deplibs) {
+        return NGX_CONF_ERROR;
+    }
+    ngx_str_t* elts = cf->args->elts;
+    for (size_t i = 1; i < cf->args->nelts; i++) {
+        ngx_str_t* el = ngx_array_push(ctx->deplibs);
+        if (NULL == el) {
+            return NGX_CONF_ERROR;
+        }
+        *el = elts[i];
+    }
     return NGX_CONF_OK;
 }
 
@@ -162,23 +185,11 @@ static char* bch_merge_loc_conf(ngx_conf_t* cf, void* parent, void* conf) {
         }
         if (!exists) {
 
-            // check lib can be loaded, symbols checks are omitted for now
-            char* libname_noesc = bch_unescape_spaces(cf->log, ctx->libname);
-            if (NULL == libname_noesc) {
+            // check handler lib can be loaded
+            ngx_int_t err_load = bch_location_check_dyload(cf->log, ctx);
+            if (NGX_OK != err_load) {
                 return NGX_CONF_ERROR;
             }
-            void* lib = bch_dyload_library(cf->log, libname_noesc);
-            free(libname_noesc);
-            if (NULL == lib) {
-                return NGX_CONF_ERROR;
-            }
-#ifndef _WIN32
-            // FreeLibrary at this point causes Access Violation
-            int err_closed = bch_dyload_close(cf->log, lib);
-            if (0 != err_closed) {
-                return NGX_CONF_ERROR;
-            }
-#endif //!_WIN32
 
             // add location
             size_t count = mctx->locations_count + 1;
@@ -204,6 +215,13 @@ static ngx_command_t conf_desc[] = {
     { ngx_string("background_content_handler"),
       NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
       conf_background_content_handler,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      0,
+      NULL},
+
+    { ngx_string("background_content_handler_deplibs"),
+      NGX_HTTP_LOC_CONF | NGX_CONF_1MORE,
+      conf_background_content_handler_deplibs,
       NGX_HTTP_LOC_CONF_OFFSET,
       0,
       NULL},
